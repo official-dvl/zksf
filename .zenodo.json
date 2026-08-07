@@ -2,7 +2,7 @@
   "title": "qsim-sdk: Python client for the Zero Kelvin Simulation Foundry",
   "description": "<p>Python client for a cloud service that executes quantum circuits on classical simulators, GPU accelerators, or real quantum processors, and attaches a documented accuracy statement to every approximate result.</p><p>One API call reaches exact statevector simulation on CPU or GPU, stabilizer simulation for Clifford circuits, matrix product state simulation for circuits of bounded entanglement, Pauli propagation for expectation values on shallow circuits, and real superconducting and trapped-ion hardware. A router sends each circuit to the cheapest method able to answer it.</p><p>Two certification protocols are defined. <strong>ZCC-v0.1</strong> states simulation accuracy, either as a convergence check or, on the certified path, as a single-run bound measured from the weight discarded during truncation. <strong>ZHF-v0.1</strong> states hardware fidelity, computed by comparing measured device counts against the exact ideal distribution where the circuit remains classically tractable. Runs whose own error bound would be vacuous are rejected with a diagnostic rather than returned as a number. Certificates are independently verifiable without authentication.</p>",
   "upload_type": "software",
-  "license": "MIT",
+  "license": "mit",
   "access_right": "open",
   "creators": [
     {
@@ -32,13 +32,11 @@
     },
     {
       "identifier": "https://zksf.org",
-      "relation": "isDocumentedBy",
-      "resource_type": "publication-webpage"
+      "relation": "isDocumentedBy"
     },
     {
       "identifier": "https://zksf.org/docs/",
-      "relation": "isDocumentedBy",
-      "resource_type": "publication-webpage"
+      "relation": "isDocumentedBy"
     }
   ]
 }
