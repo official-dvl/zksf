@@ -41,26 +41,37 @@ ZCC-v0.1 operates in two modes, and the mode is recorded on the certificate.
 approximation setting. Agreement between settings is evidence of convergence. This is
 a diagnostic, not a proof, and the certificate records it as such.
 
-**Certified mode (rigorous bound).** Opted into per job. On the MPS engine, the
+**Certified mode (measured bound).** Opted into per job. On the MPS engine, the
 discarded Schmidt weight accumulated across truncations is tracked during the
-contraction and converted into a rigorous single-run bound on the output distribution.
-This is a proof-carrying statement about that run, not an estimate.
+contraction and converted into a single-run bound on the output distribution. The
+discarded weight is measured within the run rather than estimated or extrapolated,
+and each individual truncation is optimal by Eckart-Young. The conversion to a
+per-outcome bound assumes truncation errors accumulate incoherently; see section 5.3
+for the worst case, which is why this is stated as a measured bound rather than a
+proof.
 
 ### 2.2 Worked example
 
-A 12-qubit GHZ state on `mps.quimb.cpu` with `certified=true`:
+A 24-qubit QAOA MaxCut ring at `p=3` on `mps.quimb.cpu` with `certified=true` and
+`max_bond=48`, a setting at which the bond cap binds and truncation genuinely
+discards weight:
 
 ```
 Engine           : mps.quimb.cpu
 Protocol         : ZCC-v0.1
-Mode             : certified (rigorous single-run truncation bound)
-Discarded weight : 2.22e-16
-Error bound      : 2.11e-08
+Mode             : certified (measured single-run truncation bound)
+Discarded weight : 5.617e-09
+Error bound      : 1.06e-04
 ```
 
-The bound of `2.11e-08` is the quantity to reason about. It states that the returned
-distribution lies within that distance of the exact distribution for this circuit,
-under the assumptions in section 5.
+The bound of `1.06e-04` is the quantity to reason about. It states that each returned
+outcome probability lies within that distance of the exact value for this circuit,
+under the assumptions in section 5. The full certificate is public at
+<https://api.zksf.org/certify/3d409b6562194a2e>.
+
+A circuit the simulator can represent exactly reports a discarded weight at or near
+machine precision, which certifies an exact computation rather than demonstrating the
+bound. The example above is chosen deliberately so the bound is doing real work.
 
 ### 2.3 Engine coverage
 
@@ -154,15 +165,25 @@ Declared explicitly. A certification claim is only as credible as its stated bou
    circuit expresses the intended computation.
 2. **Shot noise is separate.** Finite sampling error is reported independently of the
    approximation bound and is not folded into it.
-3. **Rigorous mode is engine-dependent.** Single-run rigorous bounds are available on
+3. **Certified mode is engine-dependent.** Single-run measured bounds are available on
    the quimb MPS engine. Other engines report convergence diagnostics, which do not
    carry the same force, and `noisy.cpu` is outside the protocol entirely.
-4. **Hardware fidelity is not predictive.** A ZHF-v0.1 figure characterises one
+4. **The MPS bound assumes incoherent accumulation.** Writing eps for the total
+   discarded weight, the reported per-outcome bound is sqrt(2*eps). Each individual
+   truncation is optimal by Eckart-Young and eps is measured exactly, but across N
+   sequential truncations the adversarial accumulation is the sum of sqrt(eps_i),
+   which can exceed sqrt(2*sum_i eps_i) by a factor of up to sqrt(N/2). The reported
+   figure is tight in the ordinary case, where errors accumulate incoherently, and is
+   stated as a measured bound rather than a worst-case guarantee. Pauli propagation
+   does not share this caveat: its bound is an additive triangle inequality over
+   discarded coefficient mass. Where a hard ceiling is required, use an exact or
+   stabilizer engine.
+5. **Hardware fidelity is not predictive.** A ZHF-v0.1 figure characterises one
    execution on one device at one time. Queue position, calibration drift, and
    ambient conditions all move it. It is a record, not a forecast.
-5. **Direct verification requires a reference.** Where no reference distribution is
+6. **Direct verification requires a reference.** Where no reference distribution is
    obtainable, direct mode is unavailable.
-6. **Version 0.1 is not frozen.** Protocol identifiers pin the version deliberately.
+7. **Version 0.1 is not frozen.** Protocol identifiers pin the version deliberately.
    Specifications below 1.0 may change, and certificates remain interpretable because
    the version travels with them.
 
