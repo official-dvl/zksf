@@ -26,7 +26,7 @@ substitutes device noise for the ideal distribution.
 
 An approximate result without an error statement is not a measurement, it is an
 assertion. The purpose of this service, and of the certification protocols documented
-in [`docs/CERTIFICATION.md`](docs/CERTIFICATION.md), is to return a quantity alongside
+in [`docs/CERTIFICATION.md`](https://github.com/official-dvl/zksf/blob/main/docs/CERTIFICATION.md), is to return a quantity alongside
 each result that states how far it may be from the truth, and to make that quantity
 independently checkable by a third party.
 
@@ -84,7 +84,7 @@ print(job["result"]["counts"])      # outcome histogram
 print(job["result"]["error_info"])  # accuracy statement for this run
 ```
 
-Further examples are in [`examples/`](examples/).
+Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/main/examples).
 
 ## 5. API surface
 
@@ -157,7 +157,7 @@ configuration rather than properties of the methods.
 ## 7. Certification
 
 Two protocols are defined. Both are described in full, with worked figures, in
-[`docs/CERTIFICATION.md`](docs/CERTIFICATION.md).
+[`docs/CERTIFICATION.md`](https://github.com/official-dvl/zksf/blob/main/docs/CERTIFICATION.md).
 
 | Protocol | Applies to | Reports |
 |---|---|---|
@@ -202,14 +202,14 @@ boundaries:
 ## 9. Citation
 
 If this service or its certification protocols contribute to published work, please
-cite the protocol note. Machine-readable metadata is in [`CITATION.cff`](CITATION.cff).
+cite the protocol note. Machine-readable metadata is in [`CITATION.cff`](https://github.com/official-dvl/zksf/blob/main/CITATION.cff).
 
 ## 10. Contributing and security
 
-- Contribution guidance: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Vulnerability disclosure: [`SECURITY.md`](SECURITY.md). Please do not open a public
-  issue for a security report.
+- Contribution guidance: [`CONTRIBUTING.md`](https://github.com/official-dvl/zksf/blob/main/CONTRIBUTING.md)
+- Vulnerability disclosure: [`SECURITY.md`](https://github.com/official-dvl/zksf/blob/main/SECURITY.md).
+  Please do not open a public issue for a security report.
 
 ## 11. License
 
-MIT. See [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](https://github.com/official-dvl/zksf/blob/main/LICENSE).
