@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: "qsim-sdk: Python client for the Zero Kelvin Simulation Foundry"
+message: "If you use this software or its certification protocols in published work, please cite it as below."
+type: software
+authors:
+  - name: "ZKSF.org (Zero Kelvin Simulation Foundry)"
+    email: info@zksf.org
+    website: "https://zksf.org"
+  - name: "Digital Venture Labs LLC"
+repository-code: "https://github.com/official-dvl/zksf"
+url: "https://zksf.org"
+abstract: >-
+  Python client for a cloud service that executes quantum circuits on classical
+  simulators, GPU accelerators, or real quantum processors, and attaches a
+  documented accuracy statement to every approximate result. Two certification
+  protocols are defined: ZCC-v0.1 for simulated results and ZHF-v0.1 for
+  quantum-hardware fidelity. Certificates are independently verifiable without
+  authentication.
+keywords:
+  - quantum computing
+  - quantum circuit simulation
+  - tensor networks
+  - matrix product states
+  - error bounds
+  - certification
+license: MIT
+version: 0.2.0

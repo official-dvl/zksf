@@ -1,0 +1,55 @@
+[project]
+name = "qsim-sdk"
+version = "0.2.0"
+description = "Run quantum circuits on CPU, GPU, or real hardware with a certified error estimate on every result"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ZKSF", email = "info@zksf.org" }]
+keywords = [
+  "quantum",
+  "quantum computing",
+  "quantum circuit simulator",
+  "simulator",
+  "qiskit",
+  "tensor network",
+  "matrix product state",
+  "clifford",
+  "stabilizer",
+  "QPU",
+  "error bars",
+  "certification",
+]
+dependencies = ["httpx>=0.24", "qiskit>=1.0"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Physics",
+  "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+# Accept Cirq / PennyLane / pyQuil / Braket circuits, not just Qiskit.
+multiframework = ["qbraid>=0.7"]
+
+[project.urls]
+Homepage = "https://zksf.org"
+Documentation = "https://zksf.org/docs"
+Console = "https://app.zksf.org"
+Source = "https://github.com/official-dvl/zksf"
+Issues = "https://github.com/official-dvl/zksf/issues"
+Changelog = "https://github.com/official-dvl/zksf/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["qsim_sdk*"]
