@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.whl
+*.tar.gz
+
+# Environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Credentials: never commit a token
+*token*
+*secret*
+*.pem
+*.key
+*.jks
