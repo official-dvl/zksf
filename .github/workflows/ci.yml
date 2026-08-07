@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and import (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Import check
+        run: |
+          python -c "import qsim_sdk; print(qsim_sdk.Client)"
+
+      - name: Serialise a circuit without contacting the API
+        run: |
+          python -c "
+          from qiskit import QuantumCircuit
+          from qsim_sdk import _to_qasm2
+          qc = QuantumCircuit(2); qc.h(0); qc.cx(0,1); qc.measure_all()
+          out = _to_qasm2(qc)
+          assert 'OPENQASM 2.0' in out, out
+          print('qasm2 serialisation ok')
+          "
+
+  qiskit-versions:
+    name: Qiskit compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        qiskit: ["1.*", "2.*"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with pinned Qiskit
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install "qiskit==${{ matrix.qiskit }}"
+      - name: Import and serialise
+        run: |
+          python -c "
+          import qiskit
+          from qiskit import QuantumCircuit
+          from qsim_sdk import _to_qasm2
+          print('qiskit', qiskit.__version__)
+          qc = QuantumCircuit(2); qc.h(0); qc.cx(0,1); qc.measure_all()
+          assert 'OPENQASM 2.0' in _to_qasm2(qc)
+          print('ok')
+          "
+
+  build-dist:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
