@@ -1,10 +1,11 @@
-"""Request a rigorous ZCC-v0.1 error bound, then export a verifiable certificate.
+"""Request a measured ZCC-v0.1 error bound, then export a verifiable certificate.
 
     python examples/03_certified_bound.py
 
 The MPS engine tracks discarded Schmidt weight during contraction and converts it into
-a rigorous single-run bound on the output distribution. This is opt-in per job because
-it costs more than the default convergence check.
+a single-run bound on the output distribution, measured within the run rather than
+extrapolated across runs. This is opt-in per job because it costs more than the
+default convergence check.
 
 See docs/CERTIFICATION.md for what the bound does and does not assert.
 """
