@@ -1,5 +1,6 @@
 cff-version: 1.2.0
 title: "qsim-sdk: Python client for the Zero Kelvin Simulation Foundry"
+doi: 10.5281/zenodo.21836619
 message: "If you use this software or its certification protocols in published work, please cite it as below."
 type: software
 authors:
@@ -24,4 +25,4 @@ keywords:
   - error bounds
   - certification
 license: MIT
-version: 0.2.0
+version: 0.2.2
