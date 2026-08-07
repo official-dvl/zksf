@@ -139,7 +139,7 @@ Selection can be overridden with the `engine` argument.
 |---|---|---|---|
 | CPU | `exact.cpu` | Aer statevector | Exact. Hard ceiling at 30 qubits, set by RAM |
 | CPU | `clifford` | Stim | Exact for Clifford and stabilizer circuits, scales to thousands of qubits. Rejects non-Clifford gates |
-| CPU | `mps.quimb.cpu` | Tensor network (quimb) | Matrix product state, past 100 qubits. Accuracy depends on circuit entanglement. The only engine offering rigorous single-run bounds |
+| CPU | `mps.quimb.cpu` | Tensor network (quimb) | Matrix product state, past 100 qubits. Accuracy depends on circuit entanglement. The only engine offering measured single-run bounds |
 | CPU | `mps.aer.cpu` | Tensor network (Aer) | An independent MPS implementation, retained for cross-checking against the quimb engine |
 | CPU | `pauli.cpu` | Pauli propagation | Expectation values rather than sampled counts. Supported gates: `h`, `cx`, `cz`, `swap`, `rx`, `ry`, `rz`, `rzz`, `rxx`, `ryy`, `x`, `y`, `z`, `s`, `t`, and their inverses |
 | CPU | `noisy.cpu` | Density matrix or statevector with a noise model | Device-noise preview, superconducting model by default, optional zero-noise error mitigation. Same 30-qubit ceiling. **Not certifiable, see section 7** |
