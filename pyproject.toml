@@ -1,6 +1,6 @@
 [project]
 name = "qsim-sdk"
-version = "0.2.0"
+version = "0.2.2"
 description = "Run quantum circuits on CPU, GPU, or real hardware with a certified error estimate on every result"
 readme = "README.md"
 requires-python = ">=3.10"
