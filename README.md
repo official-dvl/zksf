@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/qsim-sdk.svg)](https://pypi.org/project/qsim-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/qsim-sdk.svg)](https://pypi.org/project/qsim-sdk/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/official-dvl/zksf/blob/main/LICENSE)
 
 Official Python client for **ZKSF** (Zero Kelvin Simulation Foundry): a cloud service
 that executes quantum circuits on classical simulators, GPU accelerators, or real
