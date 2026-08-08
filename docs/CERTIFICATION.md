@@ -46,8 +46,9 @@ discarded Schmidt weight accumulated across truncations is tracked during the
 contraction and converted into a single-run bound on the output distribution. The
 discarded weight is measured within the run rather than estimated or extrapolated,
 and each individual truncation is optimal by Eckart-Young. The conversion to a
-per-outcome bound assumes truncation errors accumulate incoherently; see section 5.3
-for the worst case, which is why this is stated as a measured bound rather than a
+per-outcome bound assumes truncation errors accumulate incoherently; see section 5.4
+for the worst case and for the measurements showing that assumption failing in deep
+circuits, which is why this is stated as an empirically supported bound rather than a
 proof.
 
 ### 2.2 Worked example
@@ -168,22 +169,28 @@ Declared explicitly. A certification claim is only as credible as its stated bou
 3. **Certified mode is engine-dependent.** Single-run measured bounds are available on
    the quimb MPS engine. Other engines report convergence diagnostics, which do not
    carry the same force, and `noisy.cpu` is outside the protocol entirely.
-4. **The MPS bound assumes incoherent accumulation.** Writing eps for the total
-   discarded weight, the reported per-outcome bound is sqrt(2*eps). Each individual
-   truncation is optimal by Eckart-Young and eps is measured exactly, but across N
-   sequential truncations the adversarial accumulation is the sum of sqrt(eps_i),
-   which can exceed sqrt(2*sum_i eps_i) by a factor of up to sqrt(N/2). The reported
-   figure is tight in the ordinary case, where errors accumulate incoherently, and is
-   stated as a measured bound rather than a worst-case guarantee. Pauli propagation
-   does not share this caveat: its bound is an additive triangle inequality over
-   discarded coefficient mass. Where a hard ceiling is required, use an exact or
-   stabilizer engine.
-5. **Hardware fidelity is not predictive.** A ZHF-v0.1 figure characterises one
+4. **The MPS bound assumes incoherent accumulation, and that assumption can fail.**
+   Writing eps for the total discarded weight, the reported per-outcome bound is
+   sqrt(2*eps). Each individual truncation is optimal by Eckart-Young and eps is
+   measured exactly, but across N sequential truncations the adversarial accumulation
+   is the sum of sqrt(eps_i), which can exceed sqrt(2*sum_i eps_i) by a factor of up
+   to sqrt(N/2). We have measured deep circuits in which eps understates the true
+   infidelity by a factor of 7, so the condition is not always met and the bound does
+   not follow from that derivation alone. Pauli propagation does not share this
+   caveat: its bound is an additive triangle inequality over discarded coefficient
+   mass. Where a hard ceiling is required, use an exact or stabilizer engine.
+5. **The per-outcome bound is an empirical result.** It was never exceeded across 334
+   runs checked against exact simulation, 290 of them constructed specifically to
+   falsify it, approaching at closest 49% of its value. Verification requires an exact
+   reference, so those checks reach 20 qubits while the engine is used well beyond
+   that size. No direct evidence about the bound exists above 20 qubits, and none is
+   obtainable by this method.
+6. **Hardware fidelity is not predictive.** A ZHF-v0.1 figure characterises one
    execution on one device at one time. Queue position, calibration drift, and
    ambient conditions all move it. It is a record, not a forecast.
-6. **Direct verification requires a reference.** Where no reference distribution is
+7. **Direct verification requires a reference.** Where no reference distribution is
    obtainable, direct mode is unavailable.
-7. **Version 0.1 is not frozen.** Protocol identifiers pin the version deliberately.
+8. **Version 0.1 is not frozen.** Protocol identifiers pin the version deliberately.
    Specifications below 1.0 may change, and certificates remain interpretable because
    the version travels with them.
 
