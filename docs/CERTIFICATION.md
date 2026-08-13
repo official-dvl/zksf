@@ -138,7 +138,7 @@ A certificate is minted from a completed job and receives a stable identifier.
 
 ```
 POST https://api.zksf.org/jobs/<job_id>/certificate
-     -> { cert_id, protocol, download_url }
+     -> { cert_id, protocol, verify_url, download_url }
 ```
 
 It is then retrievable **without authentication**, which is the property that makes it
@@ -146,8 +146,13 @@ useful as evidence:
 
 ```
 GET https://api.zksf.org/certify/<cert_id>        # HTML verification page
+GET https://api.zksf.org/certify/<cert_id>/json   # the record itself, as JSON
 GET https://api.zksf.org/certify/<cert_id>/pdf    # PDF
 ```
+
+The HTML page and the PDF are renderings; the JSON is the record they are rendered
+from. It is the form to read when a certificate is being checked by a program rather
+than by a person, and it is what an independent validator should consume.
 
 Each certificate records the engine, method, shot count, device where applicable, the
 protocol and version, the verification mode, and the reported bound or fidelity. Every
