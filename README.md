@@ -69,6 +69,14 @@ Obtain an API token from the console at <https://app.zksf.org> (sign in, then
 
 ## 4. Quick start
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/quickstart.ipynb)
+
+The notebook above runs in the browser with nothing installed. Its first half needs no
+account and spends nothing: it reads four real, already-completed certified runs from the
+public API, covering exact simulation, an approximate run with a measured bound, a
+192-qubit Pauli propagation result, and a Bell state executed on IonQ Forte-1 hardware.
+The second half runs new jobs against your own token.
+
 ```python
 import qsim_sdk
 from qiskit import QuantumCircuit
