@@ -1,5 +1,6 @@
 # qsim-sdk
 
+[![CI](https://github.com/official-dvl/zksf/actions/workflows/ci.yml/badge.svg)](https://github.com/official-dvl/zksf/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/qsim-sdk.svg)](https://pypi.org/project/qsim-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/qsim-sdk.svg)](https://pypi.org/project/qsim-sdk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/official-dvl/zksf/blob/main/LICENSE)
