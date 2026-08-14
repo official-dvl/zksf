@@ -77,6 +77,16 @@ public API, covering exact simulation, an approximate run with a measured bound,
 192-qubit Pauli propagation result, and a Bell state executed on IonQ Forte-1 hardware.
 The second half runs new jobs against your own token.
 
+Six algorithm tutorials follow the same pattern, one per notebook: build the circuit, then
+read the certificate for the run that produced the published result. See
+[`examples/`](examples/) for all seven, or jump straight in:
+[GHZ and Bell states](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/ghz-bell-state.ipynb) ·
+[Grover](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/grover-search.ipynb) ·
+[QAOA MaxCut](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/qaoa-maxcut.ipynb) ·
+[VQE H2](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/vqe-h2.ipynb) ·
+[Bernstein-Vazirani](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/bernstein-vazirani.ipynb) ·
+[Teleportation](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/quantum-teleportation.ipynb)
+
 ```python
 import qsim_sdk
 from qiskit import QuantumCircuit
