@@ -162,7 +162,7 @@ Selection can be overridden with the `engine` argument.
 | CPU | `mps.aer.cpu` | Tensor network (Aer) | An independent MPS implementation, retained for cross-checking against the quimb engine |
 | CPU | `pauli.cpu` | Pauli propagation | Expectation values rather than sampled counts. Supported gates: `h`, `cx`, `cz`, `swap`, `rx`, `ry`, `rz`, `rzz`, `rxx`, `ryy`, `x`, `y`, `z`, `s`, `t`, and their inverses |
 | CPU | `noisy.cpu` | Density matrix or statevector with a noise model | Device-noise preview, superconducting model by default, optional zero-noise error mitigation. Same 30-qubit ceiling. **Not certifiable, see section 7** |
-| GPU | `exact.gpu` | Aer CUDA statevector | Exact. Ceiling is deployment-configured via `QSIM_GPU_MAX_QUBITS` |
+| GPU | `exact.gpu` | Aer CUDA statevector | Exact, to 32 qubits. Size-routed across two tiers: up to 30 qubits on the 24 GB card, 31 to 32 on the larger card, which costs more per GPU-hour. Routing is automatic; you name `exact.gpu` either way |
 | QPU | `qpu.rigetti` | Real hardware | Rigetti Cepheus superconducting processor. Billed at provider cost |
 | QPU | `qpu.ionq` | Real hardware | IonQ Forte-1 trapped-ion processor. Billed at provider cost |
 
