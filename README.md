@@ -3,6 +3,7 @@
 [![CI](https://github.com/official-dvl/zksf/actions/workflows/ci.yml/badge.svg)](https://github.com/official-dvl/zksf/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/qsim-sdk.svg)](https://pypi.org/project/qsim-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/qsim-sdk.svg)](https://pypi.org/project/qsim-sdk/)
+[![Qiskit](https://img.shields.io/badge/Qiskit-%E2%89%A5%201.0-6133BD?logo=qiskit&logoColor=white)](https://github.com/Qiskit/qiskit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/official-dvl/zksf/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21836619.svg)](https://doi.org/10.5281/zenodo.21836619)
 
