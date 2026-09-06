@@ -11,6 +11,11 @@ A parameter sweep goes in one request rather than one per point:
 
     job = client.run_sweep(parameterized_circuit, [{theta: v} for v in values])
     qsim_sdk.expectations(job)        # one per value, None where it failed
+
+Neutral-atom analog work is a register and a pulse schedule rather than a
+circuit, so it has its own entry point:
+
+    job = client.run_sequence(pulser_sequence)
 """
 from __future__ import annotations
 
@@ -31,6 +36,30 @@ class JobFailed(RuntimeError):
 
 
 DEFAULT_BASE_URL = "https://api.zksf.org"
+
+#: The local exact analog engine. Analog jobs always name their engine: routing
+#: inspects gate-circuit features, and a pulse schedule has none of them.
+ANALOG_ENGINE = "analog.pulser.cpu"
+
+
+def _to_pulser(sequence: Any) -> str:
+    """Normalize a Pulser sequence to its abstract representation.
+
+    Accepts a `pulser.Sequence` or an already-serialised JSON string, and reaches
+    the object by duck typing rather than importing pulser. That keeps pulser out
+    of this SDK's dependencies: someone who has it passes the object, someone who
+    does not passes the JSON.
+    """
+    if isinstance(sequence, str):
+        return sequence
+    to_abstract_repr = getattr(sequence, "to_abstract_repr", None)
+    if to_abstract_repr is None:
+        raise TypeError(
+            f"expected a pulser.Sequence or its abstract-repr JSON string, got "
+            f"{type(sequence).__name__}. Build one with pulser, then pass either "
+            f"the Sequence or sequence.to_abstract_repr()."
+        )
+    return to_abstract_repr()
 
 
 def _to_qasm2(circuit: Any) -> str:
@@ -196,6 +225,79 @@ class Client:
             bound, shots=shots, engine=engine, observable=observable, **kwargs
         )
 
+    # --------------------------------------------------------------- waiting
+
+    def _wait(self, job_id: str, poll_seconds: float, timeout: float) -> dict[str, Any]:
+        """Poll until the job reaches a terminal state, or raise saying why."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            job = self.job(job_id)
+            if job["status"] == "done":
+                return job
+            if job["status"] == "rejected":
+                raise JobRejected(job["reason"])
+            if job["status"] == "error":
+                raise JobFailed(job["error"])
+            time.sleep(poll_seconds)
+        raise TimeoutError(f"job {job_id} still running after {timeout}s")
+
+    def run(
+        self,
+        circuit: Any,
+        shots: int = 1024,
+        engine: str | None = None,
+        observable: list | None = None,
+        poll_seconds: float = 0.2,
+        timeout: float = 600.0,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Submit and wait. Raises JobRejected/JobFailed with the reason.
+        Accepts qiskit, Cirq, PennyLane, pyQuil or Braket circuits."""
+        job_id = self.submit(
+            circuit, shots=shots, engine=engine, observable=observable, **params
+        )
+        return self._wait(job_id, poll_seconds, timeout)
+
+    # ------------------------------------------------- analog (neutral atom)
+
+    def submit_sequence(
+        self,
+        sequence: Any,
+        shots: int = 1024,
+        engine: str = ANALOG_ENGINE,
+        **params: Any,
+    ) -> str:
+        """Submit a Pulser sequence to an analog neutral-atom engine.
+
+        Analog work is not a circuit: it is a register of atoms and a pulse
+        schedule, so it takes its own submission path and names its engine
+        rather than being routed by circuit features.
+        """
+        resp = self._http.post(
+            "/jobs",
+            json={
+                "pulser": _to_pulser(sequence),
+                "shots": shots,
+                "engine": engine,
+                "params": params,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    def run_sequence(
+        self,
+        sequence: Any,
+        shots: int = 1024,
+        engine: str = ANALOG_ENGINE,
+        poll_seconds: float = 0.2,
+        timeout: float = 600.0,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Submit a Pulser sequence and wait for the result."""
+        job_id = self.submit_sequence(sequence, shots=shots, engine=engine, **params)
+        return self._wait(job_id, poll_seconds, timeout)
+
 
 def expectations(job: dict[str, Any]) -> list[float | None]:
     """The expectation values of a finished batch, in submission order, with
@@ -217,30 +319,3 @@ def counts(job: dict[str, Any]) -> list[dict[str, int] | None]:
         (item.get("result") or {}).get("counts") if item["status"] == "done" else None
         for item in (job.get("results") or [])
     ]
-
-    def run(
-        self,
-        circuit: Any,
-        shots: int = 1024,
-        engine: str | None = None,
-        observable: list | None = None,
-        poll_seconds: float = 0.2,
-        timeout: float = 600.0,
-        **params: Any,
-    ) -> dict[str, Any]:
-        """Submit and wait. Raises JobRejected/JobFailed with the reason.
-        Accepts qiskit, Cirq, PennyLane, pyQuil or Braket circuits."""
-        job_id = self.submit(
-            circuit, shots=shots, engine=engine, observable=observable, **params
-        )
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            job = self.job(job_id)
-            if job["status"] == "done":
-                return job
-            if job["status"] == "rejected":
-                raise JobRejected(job["reason"])
-            if job["status"] == "error":
-                raise JobFailed(job["error"])
-            time.sleep(poll_seconds)
-        raise TimeoutError(f"job {job_id} still running after {timeout}s")
