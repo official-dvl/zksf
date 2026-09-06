@@ -115,9 +115,35 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 | `submit(circuit, shots, engine=None, ...)` | Enqueue a job, returns a job id | Billed on completion |
 | `job(job_id)` | Poll a job record | Free |
 | `run(circuit, shots, engine=None, ...)` | `submit` followed by polling until terminal state | Billed on completion |
+| `submit_sequence(sequence, shots, ...)` | Enqueue a neutral-atom Pulser sequence, returns a job id | Billed on completion |
+| `run_sequence(sequence, shots, ...)` | `submit_sequence` followed by polling | Billed on completion |
 
 `Client(base_url="https://api.zksf.org", token=None)`. The base URL is overridable for
 self-hosted or staging deployments.
+
+### 5.0 Neutral-atom sequences
+
+One engine does not take a circuit. Neutral-atom hardware is programmed as a register
+of atoms and a schedule of laser pulses, which has no gate decomposition, so it takes a
+[Pulser](https://pulser.readthedocs.io/) sequence through its own call. Routing does not
+apply either: there are no circuit features to inspect, so these jobs name their engine.
+
+```python
+from pulser import Pulse, Register, Sequence
+from pulser.devices import AnalogDevice
+
+reg = Register.square(2, spacing=6.0).with_automatic_layout(AnalogDevice)
+seq = Sequence(reg, AnalogDevice)
+seq.declare_channel("ising", "rydberg_global")
+seq.add(Pulse.ConstantPulse(1000, 6.0, 0.0, 0.0), "ising")
+
+job = client.run_sequence(seq, shots=1000)
+print(job["result"]["counts"])      # a bit reads 1 when that atom ended in Rydberg
+```
+
+Pulser is not a dependency of this package. If you do not have it installed, pass the
+sequence's abstract representation as a JSON string instead. There is no `estimate()`
+counterpart: the cost model reads gate-circuit features that a pulse schedule lacks.
 
 ### 5.1 Cost control
 

@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Fixed
+- `Client.run(circuit)` was missing from the package. A `def run` had been
+  indented one level too deep and ended up nested inside `counts()` after its
+  return statement, so it parsed, it imported, and it simply was not a method.
+  `client.run(circuit)` is the first example in this README and in the module
+  docstring, so anyone following the quickstart hit `AttributeError`. Present
+  and tested from this release.
+
+### Added
+- `run_sequence(sequence)` and `submit_sequence(sequence)` for neutral-atom
+  analog work. A Pulser sequence is a register of atoms and a schedule of laser
+  pulses rather than a circuit, so it has no gate decomposition and its own
+  entry point. Pass a `pulser.Sequence` or its abstract representation as a
+  JSON string; Pulser is not a dependency of this package.
+- `ANALOG_ENGINE`, the default engine for those calls. Analog jobs always name
+  their engine: routing inspects gate-circuit features, and a pulse schedule
+  has none of them.
+
 ## [0.3.0]
 
 ### Added
