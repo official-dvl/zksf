@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1]
+
+### Documentation
+- The engine table in section 6 listed nine engines and omitted four the service
+  runs: `qpu.iqm.garnet`, `qpu.iqm.emerald`, `qpu.aqt.ibex` and
+  `analog.pulser.cpu`. The IQM and AQT devices had been available for some time
+  without appearing here. Constraints in the new rows are read from the service's
+  device table rather than transcribed, so the quoted ceilings are the ones
+  actually enforced.
+
+No code changes. Released so the corrected README reaches PyPI, which renders it
+from the published distribution rather than from the repository.
+
 ## [0.4.0]
 
 ### Fixed

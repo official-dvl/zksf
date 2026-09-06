@@ -190,8 +190,12 @@ Selection can be overridden with the `engine` argument.
 | CPU | `pauli.cpu` | Pauli propagation | Expectation values rather than sampled counts. Supported gates: `h`, `cx`, `cz`, `swap`, `rx`, `ry`, `rz`, `rzz`, `rxx`, `ryy`, `x`, `y`, `z`, `s`, `t`, and their inverses |
 | CPU | `noisy.cpu` | Density matrix or statevector with a noise model | Device-noise preview, superconducting model by default, optional zero-noise error mitigation. Same 30-qubit ceiling. **Not certifiable, see section 7** |
 | GPU | `exact.gpu` | Aer CUDA statevector | Exact, to 32 qubits. Size-routed across two tiers: up to 30 qubits on the 24 GB card, 31 to 32 on the larger card, which costs more per GPU-hour. Routing is automatic; you name `exact.gpu` either way |
+| CPU | `analog.pulser.cpu` | Rydberg dynamics (QuTiP) | Neutral-atom analog. Takes a Pulser sequence, not a circuit, so it is never routed to and is named explicitly. Exact: the state is integrated without truncation, and the register is capped at 14 atoms. See section 5.0 |
 | QPU | `qpu.rigetti` | Real hardware | Rigetti Cepheus superconducting processor. Billed at provider cost |
-| QPU | `qpu.ionq` | Real hardware | IonQ Forte-1 trapped-ion processor. Billed at provider cost |
+| QPU | `qpu.ionq` | Real hardware | IonQ Forte-1 trapped-ion processor, 36 qubits, 100 to 5,000 shots. Billed at provider cost |
+| QPU | `qpu.iqm.garnet` | Real hardware | IQM Garnet superconducting processor, 20 qubits, up to 20,000 shots. Billed at provider cost |
+| QPU | `qpu.iqm.emerald` | Real hardware | IQM Emerald superconducting processor, 54 qubits, up to 20,000 shots. Billed at provider cost |
+| QPU | `qpu.aqt.ibex` | Real hardware | AQT IBEX Q1 trapped-ion processor, 12 qubits, up to 2,000 shots. Billed at provider cost |
 
 Two MPS implementations are maintained deliberately. Agreement between independent
 implementations of the same approximation is evidence that neither carries an
