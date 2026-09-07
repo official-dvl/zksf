@@ -52,7 +52,7 @@ assert coincidences == 0, counts
 #                               engine="qpu.quandela.belenos")
 #
 # Photons are lost, sources are imperfect, and the coincidence term stops being zero.
-# Two runs on Belenos on 2026-09-07 bunched 95.4% and 97.0% of the time. The device
+# Three runs on Belenos bunched 95.4%, 97.0% and 97.7% of the time. The device
 # also returns its own declared single-photon purity, indistinguishability and
 # transmittance with the result, so a run can state what the hardware claimed next to
 # what it did. Belenos accepts photons only on its connected input modes, and a program
