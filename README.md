@@ -117,6 +117,8 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 | `run(circuit, shots, engine=None, ...)` | `submit` followed by polling until terminal state | Billed on completion |
 | `submit_sequence(sequence, shots, ...)` | Enqueue a neutral-atom Pulser sequence, returns a job id | Billed on completion |
 | `run_sequence(sequence, shots, ...)` | `submit_sequence` followed by polling | Billed on completion |
+| `submit_photonic(circuit, input_state, shots, ...)` | Enqueue a linear-optics circuit and its input photons, returns a job id | Billed on completion |
+| `run_photonic(circuit, input_state, shots, ...)` | `submit_photonic` followed by polling | Billed on completion |
 
 `Client(base_url="https://api.zksf.org", token=None)`. The base URL is overridable for
 self-hosted or staging deployments.
@@ -144,6 +146,37 @@ print(job["result"]["counts"])      # a bit reads 1 when that atom ended in Rydb
 Pulser is not a dependency of this package. If you do not have it installed, pass the
 sequence's abstract representation as a JSON string instead. There is no `estimate()`
 counterpart: the cost model reads gate-circuit features that a pulse schedule lacks.
+
+### 5.0.1 Photonic linear optics
+
+Nor does photonic hardware take a circuit in the gate sense. There are no qubits and no
+gates: photons enter chosen modes, interfere through beamsplitters and phase shifters,
+and the answer is which modes they leave by. A program is therefore two things, a
+[Perceval](https://perceval.quandela.net/) circuit and the input photons, because unlike
+a gate circuit it does not carry its own initial state. Both are hashed, so two runs
+that differ only in where the photons entered cannot share a certificate.
+
+```python
+import perceval as pcvl
+from perceval.components import BS, PERM
+
+# Hong-Ou-Mandel: two photons meet on a balanced beamsplitter
+circuit = pcvl.Circuit(3) // (1, PERM([1, 0])) // (0, BS.H())
+
+job = client.run_photonic(circuit, [1, 0, 1], shots=1000)
+print(job["result"]["counts"])      # {'|2,0,0>': 492, '|0,2,0>': 508}
+```
+
+Indistinguishable photons must bunch: both leave by the same mode, and the coincidence
+term `|1,0,1>` is zero. That makes the coincidence fraction a direct fidelity measure,
+which is what a photonic certificate reports.
+
+The input state accepts an occupation list as above, a `perceval.BasicState`, or either
+one already serialised. Perceval is not a dependency of this package, and the list form
+needs it only for the circuit. Pass `engine="qpu.quandela.belenos"` to run on real
+hardware, which accepts photons only on its connected input modes and refuses anything
+else before submission rather than after you have paid. As with sequences there is no
+`estimate()` counterpart yet.
 
 ### 5.1 Cost control
 
@@ -195,7 +228,9 @@ Selection can be overridden with the `engine` argument.
 | QPU | `qpu.ionq` | Real hardware | IonQ Forte-1 trapped-ion processor, 36 qubits, 100 to 5,000 shots. Billed at provider cost |
 | QPU | `qpu.iqm.garnet` | Real hardware | IQM Garnet superconducting processor, 20 qubits, up to 20,000 shots. Billed at provider cost |
 | QPU | `qpu.iqm.emerald` | Real hardware | IQM Emerald superconducting processor, 54 qubits, up to 20,000 shots. Billed at provider cost |
+| CPU | `photonic.slos.cpu` | Linear optics (Perceval SLOS) | Photonic. Takes a circuit and an input Fock state, not a gate circuit, so it is never routed to and is named explicitly. Exact, and capped at 12 modes: cost grows with the ways the photons can distribute over the modes, so modes alone understate it. See section 5.0.1 |
 | QPU | `qpu.aqt.ibex` | Real hardware | AQT IBEX Q1 trapped-ion processor, 12 qubits, up to 2,000 shots. Billed at provider cost |
+| QPU | `qpu.quandela.belenos` | Real hardware | Quandela Belenos photonic processor, up to 24 modes and 12 photons, inputs on connected modes only. Billed at provider cost |
 
 Two MPS implementations are maintained deliberately. Agreement between independent
 implementations of the same approximation is evidence that neither carries an

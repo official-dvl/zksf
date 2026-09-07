@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0]
+
+### Added
+- `Client.run_photonic(circuit, input_state, ...)` and
+  `Client.submit_photonic(...)`: photonic linear-optics programs, run on the
+  `photonic.slos.cpu` simulator or on Quandela Belenos. The service has accepted
+  these since the photonic engines shipped, but only over raw HTTP, so the one
+  modality that needed the SDK most was the one it could not reach.
+- The input state accepts a `perceval.BasicState`, its serialised string, a bare
+  `"|1,0,1>"`, or a plain occupation list `[1, 0, 1]`. Perceval is not a
+  dependency of this package and the list form does not need it.
+
+A photonic program is a circuit *and* an input Fock state. A gate circuit
+carries its initial state implicitly and a Pulser sequence carries its register,
+but a linear-optics circuit says nothing about how many photons enter or where,
+so both halves are arguments and both are covered by the program hash. Two runs
+that differ only in where the photons entered therefore cannot share a
+certificate.
+
+### Documentation
+- README section 5.0.1 covers the photonic path, and the section 6 engine table
+  gains `photonic.slos.cpu` and `qpu.quandela.belenos`.
+
+### Notes
+- An occupation list is tagged `:PCVL:BasicState:` before it is sent. Perceval's
+  `deserialize()` returns any string it does not recognise unchanged, so an
+  untagged `"|1,0,1>"` is not rejected on arrival: it reaches the engine as a
+  `str` and fails several frames deep. The SDK tags it, and also tags a bare
+  `"|1,0,1>"` you pass yourself.
+- There is no `estimate()` counterpart yet, for the same reason sequences have
+  none: the cost model reads gate-circuit features these programs do not have.
+
 ## [0.4.1]
 
 ### Documentation
