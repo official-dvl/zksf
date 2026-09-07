@@ -16,9 +16,15 @@ Neutral-atom analog work is a register and a pulse schedule rather than a
 circuit, so it has its own entry point:
 
     job = client.run_sequence(pulser_sequence)
+
+Photonic work is a linear-optics circuit and the photons entering it, which
+is two things rather than one, so it takes both:
+
+    job = client.run_photonic(perceval_circuit, [1, 0, 1])
 """
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Sequence
 from typing import Any
@@ -60,6 +66,94 @@ def _to_pulser(sequence: Any) -> str:
             f"the Sequence or sequence.to_abstract_repr()."
         )
     return to_abstract_repr()
+
+
+#: The local exact photonic engine. Photonic jobs name their engine for the
+#: same reason analog ones do: routing reads gate-circuit features, and a
+#: linear-optics circuit has none of them.
+PHOTONIC_ENGINE = "photonic.slos.cpu"
+
+
+def _serialise_perceval(obj: Any, what: str) -> str:
+    """Serialise a Perceval object, or pass through an already-serialised one.
+
+    Perceval stays out of this SDK's dependencies, exactly as pulser does: a
+    caller who has it passes objects, a caller who does not passes the strings
+    perceval.serialization.serialize() produced elsewhere.
+    """
+    if isinstance(obj, str):
+        return obj
+    try:
+        from perceval.serialization import serialize
+    except ImportError as exc:
+        raise TypeError(
+            f"got {type(obj).__name__} for the {what}, and perceval is not "
+            f"installed to serialise it. Either pip install perceval-quandela, "
+            f"or pass the string perceval.serialization.serialize() returns."
+        ) from exc
+    return serialize(obj)
+
+
+#: Perceval's serialisation tag for a Fock state, hardcoded so an occupation
+#: list can be sent without perceval installed.
+#:
+#: It has to be exactly this. perceval's deserialize() returns any string it
+#: does not recognise unchanged, so a bare "|1,0,1>" is not rejected at the
+#: door: it arrives at the engine as a str and fails several frames deep with
+#: "Could not find signature for with_input: <str>". Tagging it here is what
+#: makes the difference between a Fock state and a lookalike string.
+_FOCK_TAG = ":PCVL:BasicState:"
+
+
+def _to_fock_state(state: Any) -> str:
+    """Normalize an input Fock state to the form the service deserialises.
+
+    Accepts a perceval.BasicState, its serialised string, a bare "|1,0,1>", or
+    a plain occupation list: [1, 0, 1] is one photon into mode 0 and one into
+    mode 2. The list form is the reason this is worth a helper, since it lets
+    someone describe the input without perceval installed at all.
+    """
+    if isinstance(state, str):
+        if state.startswith(":PCVL:"):
+            return state
+        if state.startswith("|") and state.endswith(">"):
+            return _FOCK_TAG + state
+        raise TypeError(
+            f"expected a Fock state like '|1,0,1>', an occupation list like "
+            f"[1, 0, 1], or the string perceval.serialization.serialize() "
+            f"returns; got {state!r}"
+        )
+    # Before the Sequence branch: a Fock state is indexable, so it would
+    # otherwise be treated as an occupation list. Let the object serialise
+    # itself rather than reconstructing its text here.
+    if hasattr(state, "n") and hasattr(state, "m"):
+        return _serialise_perceval(state, "input state")
+    if isinstance(state, Sequence):
+        if not state or not all(isinstance(n, int) and n >= 0 for n in state):
+            raise TypeError(
+                f"an occupation list must be non-empty and all non-negative "
+                f"ints, one per mode, e.g. [1, 0, 1]; got {state!r}"
+            )
+        return _FOCK_TAG + "|" + ",".join(str(n) for n in state) + ">"
+    return _serialise_perceval(state, "input state")
+
+
+def _to_photonic(circuit: Any, input_state: Any) -> str:
+    """Normalize a Perceval circuit and its input state into one program.
+
+    A photonic program is two things, not one. A gate circuit carries its
+    initial state implicitly and a Pulser sequence carries its register, but a
+    linear-optics circuit says nothing about how many photons enter or where,
+    so the input is part of the program rather than a setting on the run. Both
+    halves go into the JSON the service hashes, which is why two runs that
+    differ only in where the photons entered cannot share a certificate.
+    """
+    return json.dumps(
+        {
+            "circuit": _serialise_perceval(circuit, "circuit"),
+            "input": _to_fock_state(input_state),
+        }
+    )
 
 
 def _to_qasm2(circuit: Any) -> str:
@@ -296,6 +390,57 @@ class Client:
     ) -> dict[str, Any]:
         """Submit a Pulser sequence and wait for the result."""
         job_id = self.submit_sequence(sequence, shots=shots, engine=engine, **params)
+        return self._wait(job_id, poll_seconds, timeout)
+
+    # ------------------------------------------------------------- photonic
+
+    def submit_photonic(
+        self,
+        circuit: Any,
+        input_state: Any,
+        shots: int = 1024,
+        engine: str = PHOTONIC_ENGINE,
+        **params: Any,
+    ) -> str:
+        """Submit a linear-optics circuit and its input photons.
+
+        `circuit` is a perceval.Circuit (or its serialised string) and
+        `input_state` is where the photons enter: a perceval.BasicState, its
+        serialised string, or an occupation list such as [1, 0, 1].
+
+        Both are required and both are hashed, because a linear-optics circuit
+        does not carry its own initial state. Like analog work this names its
+        engine rather than being routed, since routing reads gate-circuit
+        features that a photonic program does not have. Pass
+        engine="qpu.quandela.belenos" to run on real hardware, which accepts
+        photons only on its connected input modes.
+        """
+        resp = self._http.post(
+            "/jobs",
+            json={
+                "photonic": _to_photonic(circuit, input_state),
+                "shots": shots,
+                "engine": engine,
+                "params": params,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    def run_photonic(
+        self,
+        circuit: Any,
+        input_state: Any,
+        shots: int = 1024,
+        engine: str = PHOTONIC_ENGINE,
+        poll_seconds: float = 0.2,
+        timeout: float = 600.0,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Submit a photonic program and wait for the result."""
+        job_id = self.submit_photonic(
+            circuit, input_state, shots=shots, engine=engine, **params
+        )
         return self._wait(job_id, poll_seconds, timeout)
 
 
