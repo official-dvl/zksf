@@ -2,6 +2,13 @@ name: publish
 
 # Publishes to PyPI via Trusted Publishing (OIDC). No API token is stored
 # anywhere: PyPI verifies the identity of this workflow directly with GitHub.
+#
+# One-time setup on PyPI: project qsim-sdk -> Manage -> Publishing ->
+# Add a new pending publisher, with
+#   Owner: official-dvl   Repository: zksf   Workflow: publish.yml
+#
+# To release: bump the version in pyproject.toml, then draft a GitHub Release
+# with a tag matching that version (for example v0.2.0) and publish it.
 
 on:
   release:

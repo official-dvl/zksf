@@ -42,6 +42,35 @@ jobs:
           print('qasm2 serialisation ok')
           "
 
+      # 0.4.0 shipped without Client.run: the package imported cleanly and every
+      # check passed while the main entry point was absent. This asserts the
+      # whole public surface is actually on the class.
+      - name: Public surface is present
+        run: |
+          python -c "
+          from qsim_sdk import Client
+          expected = ('estimate', 'submit', 'job', 'run', 'submit_batch',
+                      'run_batch', 'run_sweep', 'submit_sequence', 'run_sequence',
+                      'submit_photonic', 'run_photonic')
+          missing = [m for m in expected if not callable(getattr(Client, m, None))]
+          assert not missing, f'missing from Client: {missing}'
+          print('public surface ok:', len(expected), 'methods')
+          "
+
+      - name: Build a photonic program without perceval or the network
+        run: |
+          python -c "
+          import json
+          from qsim_sdk import _to_photonic
+          prog = json.loads(_to_photonic(':PCVL:zip:stand-in-circuit', [1, 0, 1]))
+          assert prog['circuit'] == ':PCVL:zip:stand-in-circuit', prog
+          # The tag is the whole point: perceval's deserialize() passes an
+          # unrecognised string through unchanged, so an untagged '|1,0,1>'
+          # would reach the engine as a str and fail deep inside perceval.
+          assert prog['input'] == ':PCVL:BasicState:|1,0,1>', prog
+          print('photonic serialisation ok')
+          "
+
   qiskit-versions:
     name: Qiskit compatibility
     runs-on: ubuntu-latest
