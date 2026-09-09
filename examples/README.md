@@ -1,6 +1,6 @@
 # Examples
 
-Seven notebooks and five scripts. Every notebook opens in Colab with nothing installed,
+Seven notebooks and six scripts. Every notebook opens in Colab with nothing installed,
 and in each one the part that builds a circuit and reads a published certificate needs no
 account and costs nothing. Running a new job is opt-in at the end of each notebook, and
 priced with a free `estimate()` call first.
@@ -40,6 +40,7 @@ Plain Python, no notebook. These need a token in `ZKSF_TOKEN`.
 | [03_certified_bound.py](03_certified_bound.py) | Requesting a measured ZCC-v0.1 bound with `certified=True` |
 | [04_real_hardware.py](04_real_hardware.py) | Submitting to a real quantum processor |
 | [05_photonic.py](05_photonic.py) | Linear optics: a circuit plus the photons entering it (needs `perceval-quandela`) |
+| [06_train_a_photonic_circuit.py](06_train_a_photonic_circuit.py) | A quantum circuit as a trainable torch layer: an optimiser walks a beamsplitter angle to the Hong-Ou-Mandel minimum (needs `perceval-quandela` and `torch`) |
 
 ## Checking a result you did not produce
 
