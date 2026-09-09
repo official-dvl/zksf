@@ -246,6 +246,72 @@ class Client:
         resp.raise_for_status()
         return resp.json()["id"]
 
+    def submit_parametric_sweep(
+        self,
+        program: Any,
+        bindings: Sequence[dict[str, float]],
+        *,
+        kind: str | None = None,
+        input_state: Any = None,
+        shots: int = 1024,
+        engine: str | None = None,
+        **params: Any,
+    ) -> str:
+        """Submit one parameterised program and a list of parameter values.
+
+        The counterpart of `submit_batch` for the two kinds that can carry free
+        parameters. A Pulser sequence declares them with `declare_variable`, a
+        Perceval circuit with `pcvl.P("name")`, and each binding is applied
+        server-side, so an optimiser step sends one program and N small
+        dictionaries rather than N serialised programs.
+
+        `kind` is inferred from the program: pass a Perceval circuit with
+        `input_state`, or a Pulser sequence on its own.
+        """
+        if kind is None:
+            kind = "photonic" if input_state is not None else "pulser"
+        source = (
+            _to_photonic(program, input_state) if kind == "photonic" else _to_pulser(program)
+        )
+        resp = self._http.post(
+            "/jobs/batch",
+            json={
+                "program_kind": kind,
+                "program": source,
+                "bindings": [dict(b) for b in bindings],
+                "shots": shots,
+                "engine": engine,
+                "params": params,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    def run_parametric_sweep(
+        self,
+        program: Any,
+        bindings: Sequence[dict[str, float]],
+        *,
+        kind: str | None = None,
+        input_state: Any = None,
+        shots: int = 1024,
+        engine: str | None = None,
+        poll_seconds: float = 0.2,
+        timeout: float = 600.0,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Submit a parameterised sweep and wait for every point.
+
+        Results come back in binding order, so `job["results"][i]` is the run
+        for `bindings[i]`. Like `run_batch`, a failed point is reported rather
+        than raised: an optimiser treats it as a bad point and carries on.
+        """
+        job_id = self.submit_parametric_sweep(
+            program, bindings, kind=kind, input_state=input_state,
+            shots=shots, engine=engine, **params,
+        )
+        return self._wait_all(job_id, poll_seconds, timeout)
+
     def run_batch(
         self,
         circuits: Sequence[Any],
@@ -268,6 +334,11 @@ class Client:
         job_id = self.submit_batch(
             circuits, shots=shots, engine=engine, observable=observable, **params
         )
+        return self._wait_all(job_id, poll_seconds, timeout)
+
+    def _wait_all(self, job_id: str, poll_seconds: float, timeout: float) -> dict[str, Any]:
+        """Poll a multi-point job. Unlike `_wait`, a failed *point* is not an
+        error: only the job as a whole failing is."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             job = self.job(job_id)
