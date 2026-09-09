@@ -65,6 +65,14 @@ optional transpiler extra, which routes them through qBraid into Qiskit:
 pip install "qsim-sdk[multiframework]"
 ```
 
+To use a quantum program as a differentiable PyTorch layer (`qsim_sdk.ml`), install the
+`ml` extra. torch is not a dependency of the base package, because most users of this
+client never train anything and it is a large install:
+
+```bash
+pip install "qsim-sdk[ml]"
+```
+
 Obtain an API token from the console at <https://app.zksf.org> (sign in, then
 "Copy API token").
 
@@ -119,6 +127,11 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 | `run_sequence(sequence, shots, ...)` | `submit_sequence` followed by polling | Billed on completion |
 | `submit_photonic(circuit, input_state, shots, ...)` | Enqueue a linear-optics circuit and its input photons, returns a job id | Billed on completion |
 | `run_photonic(circuit, input_state, shots, ...)` | `submit_photonic` followed by polling | Billed on completion |
+| `submit_batch(circuits, shots, ...)` | Enqueue many gate circuits as one job | Billed per circuit |
+| `run_batch(circuits, shots, ...)` | `submit_batch` followed by polling | Billed per circuit |
+| `run_sweep(circuit, bindings, ...)` | Bind one parameterised Qiskit circuit at many values and run them as one job | Billed per point |
+| `submit_parametric_sweep(program, bindings, ...)` | Enqueue one parameterised Pulser or Perceval program and a list of bindings | Billed per point |
+| `run_parametric_sweep(program, bindings, ...)` | `submit_parametric_sweep` followed by polling | Billed per point |
 
 `Client(base_url="https://api.zksf.org", token=None)`. The base URL is overridable for
 self-hosted or staging deployments.
@@ -149,8 +162,10 @@ counterpart: the cost model reads gate-circuit features that a pulse schedule la
 
 ### 5.0.1 Photonic linear optics
 
-Nor does photonic hardware take a circuit in the gate sense. There are no qubits and no
-gates: photons enter chosen modes, interfere through beamsplitters and phase shifters,
+Nor does photonic hardware take a circuit in the gate sense. Quandela sells Belenos as a
+12-qubit machine (MosaiQ 12), and dual-rail encoding does spend two of its 24 modes on
+each qubit, but the interface exposed here is the optics underneath: there are no gates,
+and photons enter chosen modes, interfere through beamsplitters and phase shifters,
 and the answer is which modes they leave by. A program is therefore two things, a
 [Perceval](https://perceval.quandela.net/) circuit and the input photons, because unlike
 a gate circuit it does not carry its own initial state. Both are hashed, so two runs
@@ -177,6 +192,59 @@ needs it only for the circuit. Pass `engine="qpu.quandela.belenos"` to run on re
 hardware, which accepts photons only on its connected input modes and refuses anything
 else before submission rather than after you have paid. As with sequences there is no
 `estimate()` counterpart yet.
+
+### 5.0.2 Parameter sweeps and training loops
+
+A single submission is rarely the workload. A variational solver, a quantum kernel or a
+photonic generative model is one *parameterised* program evaluated hundreds or thousands
+of times while an optimiser walks its parameters. Sent one job at a time that is
+thousands of round trips and thousands of queue entries, so the whole step goes as one
+job instead.
+
+Gate circuits send one bound circuit per point, because OpenQASM 2 cannot express a free
+parameter. Pulser sequences and Perceval circuits can, so they send the program once and
+a list of bindings, applied server-side. Each bound point hashes to its own value, so a
+certificate still identifies exactly which parameters produced it.
+
+```python
+import numpy, perceval as pcvl
+
+circuit = pcvl.Circuit(2) // (0, pcvl.BS(theta=pcvl.P("theta")))
+job = client.run_parametric_sweep(
+    circuit,
+    [{"theta": t} for t in numpy.linspace(0, numpy.pi, 40)],
+    input_state=[1, 1],
+    engine="photonic.slos.cpu",
+)
+job["results"][7]["result"]["counts"]      # the run for bindings[7]
+```
+
+The same call takes a Pulser sequence, whose variables come from
+`seq.declare_variable(...)`. Sweeps run on simulation engines: each provider task is
+queued and billed individually, so batching to a QPU would hide the per-task cost behind
+one job id rather than save anything. Settle the sweep in simulation, then send the
+surviving point to the machine.
+
+**As a torch layer.** `qsim_sdk.ml` wraps either kind as an `nn.Module`, so a quantum
+program becomes a differentiable layer in an ordinary PyTorch model. The forward pass is
+one job; the backward pass is one job carrying two points per parameter.
+
+```python
+from qsim_sdk.ml import PhotonicLayer          # pip install qsim-sdk[ml]
+
+layer = PhotonicLayer(client, circuit, [1, 1], shots=4000)
+opt = torch.optim.SGD(layer.parameters(), lr=0.3)
+for step in range(200):
+    opt.zero_grad()
+    criterion(layer(), target).backward()      # layer() = probability per outcome
+    opt.step()
+```
+
+Gradients are central differences, not the parameter-shift rule: the shift rule is exact
+only where an output is a sinusoid of the parameter, which is true of a Pauli rotation
+and false of a beamsplitter angle or a pulse amplitude. Shot noise sets the floor on how
+small a gradient you can resolve, so an optimiser that stalls at low shot counts is
+usually reading noise rather than a flat landscape.
 
 ### 5.1 Cost control
 
@@ -230,7 +298,7 @@ Selection can be overridden with the `engine` argument.
 | QPU | `qpu.iqm.emerald` | Real hardware | IQM Emerald superconducting processor, 54 qubits, up to 20,000 shots. Billed at provider cost |
 | CPU | `photonic.slos.cpu` | Linear optics (Perceval SLOS) | Photonic. Takes a circuit and an input Fock state, not a gate circuit, so it is never routed to and is named explicitly. Exact, and capped at 12 modes: cost grows with the ways the photons can distribute over the modes, so modes alone understate it. See section 5.0.1 |
 | QPU | `qpu.aqt.ibex` | Real hardware | AQT IBEX Q1 trapped-ion processor, 12 qubits, up to 2,000 shots. Billed at provider cost |
-| QPU | `qpu.quandela.belenos` | Real hardware | Quandela Belenos photonic processor, up to 24 modes and 12 photons, inputs on connected modes only. Billed at provider cost |
+| QPU | `qpu.quandela.belenos` | Real hardware | Quandela Belenos photonic processor (sold as MosaiQ 12, a 12-qubit machine): up to 24 modes and 12 photons, two modes per qubit under dual-rail encoding, inputs on connected modes only. Billed at provider cost |
 
 Two MPS implementations are maintained deliberately. Agreement between independent
 implementations of the same approximation is evidence that neither carries an
@@ -284,6 +352,14 @@ boundaries:
    the circuit sizes for which ZHF-v0.1 can be evaluated in its direct mode.
 6. Protocol versions are pinned in the identifier (`v0.1`). Version numbers below 1.0
    indicate that the specifications are not yet frozen.
+7. **Parameter sweeps run on simulation engines only.** Hardware is refused rather than
+   silently fanned out: each provider task is queued and billed individually, so a
+   "batch" to a QPU would hide the per-task cost behind one job id. Training loops
+   against real hardware are driven from your own code, one submission per evaluation.
+8. **`qsim_sdk.ml` gradients are central differences, not the parameter-shift rule.**
+   The shift rule is exact only where an output is a sinusoid of the parameter, which
+   holds for a Pauli rotation and not for a beamsplitter angle or a pulse amplitude.
+   The estimate therefore carries a step-size error as well as shot noise.
 
 ## 9. Citation
 

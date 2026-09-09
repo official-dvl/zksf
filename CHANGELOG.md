@@ -6,6 +6,50 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### Added
+- `Client.run_parametric_sweep(program, bindings, ...)` and
+  `Client.submit_parametric_sweep(...)`: one parameterised program plus a list
+  of parameter dictionaries, evaluated as a single job. Pulser sequences declare
+  their parameters with `declare_variable`, Perceval circuits with `pcvl.P`, and
+  each binding is applied server-side.
+- `qsim_sdk.ml`, with `PhotonicLayer` and `SequenceLayer`: a parameterised
+  quantum program as a PyTorch `nn.Module`, so a circuit becomes a
+  differentiable layer inside an ordinary training loop. `pip install
+  qsim-sdk[ml]`, or bring your own torch; the base package does not carry it.
+- `examples/06_train_a_photonic_circuit.py`, which trains a beamsplitter angle
+  to the Hong-Ou-Mandel minimum and can be pointed at real hardware by changing
+  one argument.
+
+A single submission is rarely the workload. A variational solver, a quantum
+kernel or a photonic generative model is one program evaluated hundreds or
+thousands of times while an optimiser walks its parameters, and sent one job at
+a time that is thousands of round trips and thousands of queue entries. A
+500-point photonic step used to mean serialising 500 near-identical circuits on
+every iteration; it is now one circuit and 500 small dictionaries.
+
+Each bound point is re-serialised before it runs, so it hashes to its own value
+and can carry its own certificate. Points that shared a circuit hash would make
+every certificate in a sweep indistinguishable.
+
+**Gradients are central differences, not the parameter-shift rule.** The shift
+rule is exact only where an output is a sinusoid of the parameter, which holds
+for a Pauli rotation in a gate circuit and does not hold for a beamsplitter
+angle in an optical mesh or a pulse amplitude in an analog sequence. Central
+differences cost the same two evaluations per parameter and are correct for
+both; `eps` defaults to 0.01 and is worth raising when shot noise at your shot
+count swamps the difference.
+
+### Notes
+- Sweeps run on simulation engines. Hardware is refused deliberately: each
+  provider task is queued and billed individually, so batching to a QPU would
+  hide the per-task cost behind one job id rather than save anything. Settle the
+  sweep in simulation and send the surviving point to the machine.
+- A binding that names a parameter the program does not declare is refused at
+  submission. Left through, it would bind nothing and run the default point N
+  times, which reads as a converged optimiser rather than a bug.
+
 ## [0.5.0]
 
 ### Added
