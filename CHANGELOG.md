@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0]
+
+### Added
+- `Client.solve(hamiltonian, qubits, ...)` and `Client.submit_solve(...)`: a
+  ground-state problem rather than a program. The ansatz is named instead of
+  sent, because OpenQASM 2 cannot express an unbound parameter, and the service
+  runs the variational loop. Read `result["ground_state"]["ceiling"]` rather
+  than `result["energy"]`: the variational principle puts the true ground state
+  at or below the energy found, and the ceiling adds the simulation's own error
+  bound to give a number the true answer cannot exceed. A run reports no
+  ceiling when the engine reported no bound, rather than assuming one.
+- `Client.run_mis(vertices, ...)` and `Client.submit_mis(...)`: maximum
+  independent set on a neutral-atom register. Positions in micrometres, not a
+  graph: an edge exists exactly where two atoms fall inside the blockade
+  radius, so the geometry is the problem and the family that maps without a
+  layout step is the unit-disk graphs. The answer arrives on `result["mis"]`
+  with `valid_fraction`, the share of shots that obeyed every edge.
+
+Both endpoints predate this release; neither had a client method, so the two
+workloads shaped like what people actually want — give us a problem, get an
+answer — were reachable only by hand-writing HTTP.
+
+### Notes
+- `verbatim=True` on `run`/`submit` asks a gate QPU to execute the circuit
+  exactly as written rather than compiling it first, which is what
+  hardware characterisation needs. It travels in `params`, so it has worked
+  since params existed; it is documented now because the backend honours it.
+  The circuit must already be in that device's native gates, and the provider
+  rejects it unbilled otherwise.
+
 ## [0.6.0]
 
 ### Added

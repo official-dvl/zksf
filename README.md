@@ -132,6 +132,8 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 | `run_sweep(circuit, bindings, ...)` | Bind one parameterised Qiskit circuit at many values and run them as one job | Billed per point |
 | `submit_parametric_sweep(program, bindings, ...)` | Enqueue one parameterised Pulser or Perceval program and a list of bindings | Billed per point |
 | `run_parametric_sweep(program, bindings, ...)` | `submit_parametric_sweep` followed by polling | Billed per point |
+| `solve(hamiltonian, qubits, ...)` / `submit_solve(...)` | A ground-state problem rather than a program: the service runs the variational loop | Billed per evaluation |
+| `run_mis(vertices, ...)` / `submit_mis(...)` | Maximum independent set on a neutral-atom register | Billed as one analog job |
 
 `Client(base_url="https://api.zksf.org", token=None)`. The base URL is overridable for
 self-hosted or staging deployments.
