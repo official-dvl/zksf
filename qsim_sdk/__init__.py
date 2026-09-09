@@ -246,6 +246,116 @@ class Client:
         resp.raise_for_status()
         return resp.json()["id"]
 
+    # ------------------------------------------------------------- problems
+
+    def submit_solve(
+        self,
+        hamiltonian: Sequence[Sequence[Any]],
+        qubits: int,
+        *,
+        ansatz: str = "real_amplitudes",
+        reps: int = 2,
+        max_iterations: int = 60,
+        shots: int = 1024,
+        engine: str | None = None,
+        seed: int | None = None,
+        **params: Any,
+    ) -> str:
+        """Find a ground-state estimate for a Hamiltonian; returns a job id.
+
+        A problem rather than a program: the ansatz is named instead of sent,
+        because OpenQASM 2 cannot express an unbound parameter, and the service
+        runs the variational loop. Every term must name every qubit, padding
+        with I.
+
+        The optimiser is SPSA, which costs two circuit evaluations per
+        iteration whatever the parameter count, plus one final run at the best
+        point: `max_iterations=60` is 121 charged evaluations.
+        """
+        resp = self._http.post(
+            "/solve",
+            json={
+                "hamiltonian": [list(t) for t in hamiltonian],
+                "qubits": qubits,
+                "ansatz": ansatz,
+                "reps": reps,
+                "max_iterations": max_iterations,
+                "shots": shots,
+                "engine": engine,
+                "seed": seed,
+                "params": params,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    def solve(
+        self,
+        hamiltonian: Sequence[Sequence[Any]],
+        qubits: int,
+        *,
+        poll_seconds: float = 0.5,
+        timeout: float = 1800.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Submit a ground-state problem and wait for the answer.
+
+        Read `result["ground_state"]["ceiling"]` rather than `result["energy"]`:
+        the variational principle puts the true ground state at or below the
+        energy found, and the ceiling adds the simulation's own error bound to
+        give a number the true answer cannot exceed. A run reports no ceiling
+        when the engine reported no bound, rather than assuming one.
+        """
+        job_id = self.submit_solve(hamiltonian, qubits, **kwargs)
+        return self._wait(job_id, poll_seconds, timeout)
+
+    def submit_mis(
+        self,
+        vertices: Sequence[Sequence[float]],
+        *,
+        weights: Sequence[float] | None = None,
+        shots: int = 100,
+        engine: str | None = None,
+        blockade_um: float = 7.5,
+        duration_ns: int = 4_000,
+    ) -> str:
+        """Maximum independent set on a neutral-atom register; returns a job id.
+
+        Positions in micrometres, not a graph: on this hardware an edge exists
+        exactly where two atoms fall inside the blockade radius, so the geometry
+        is the problem. An arbitrary graph has to be laid out into positions
+        that reproduce it first, which this does not do for you.
+
+        The answer arrives on `result["mis"]`, with `valid_fraction` reporting
+        the share of shots that obeyed every edge. Optional non-negative
+        `weights` give the weighted problem.
+        """
+        resp = self._http.post(
+            "/mis",
+            json={
+                "vertices": [list(v) for v in vertices],
+                "weights": list(weights) if weights is not None else None,
+                "shots": shots,
+                "engine": engine,
+                "blockade_um": blockade_um,
+                "duration_ns": duration_ns,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    def run_mis(
+        self,
+        vertices: Sequence[Sequence[float]],
+        *,
+        poll_seconds: float = 0.5,
+        timeout: float = 1800.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Submit an independent-set problem and wait for the answer."""
+        job_id = self.submit_mis(vertices, **kwargs)
+        return self._wait(job_id, poll_seconds, timeout)
+
     def submit_parametric_sweep(
         self,
         program: Any,
