@@ -110,6 +110,17 @@ Hardware does not approximate, it is noisy. There is no truncation parameter to 
 The meaningful question is therefore not "how far might this be from ideal" but "how
 far is it, measured". ZHF-v0.1 answers the latter.
 
+The protocol is modality-agnostic: Hellinger fidelity needs counts, an exact reference
+and a hashable program, and every processor here supplies all three. So certificates are
+issued for superconducting, trapped-ion, photonic and neutral-atom runs alike, each
+compared against its own exact local engine, and a neutral-atom sequence is compared
+against `analog.pulser.cpu` rather than against a gate simulator.
+
+That reference is also the ceiling. A neutral-atom run wider than 14 atoms, or a photonic
+program past 12 modes, returns results and **no certificate**, because nothing can
+compute the distribution to compare it against. The limit belongs to the simulator, not
+to the hardware, which is why the processors accept far more than the certifiable range.
+
 ### 3.1 Direct verification mode
 
 Where a reference distribution is obtainable, the hardware counts are compared against
