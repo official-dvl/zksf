@@ -162,6 +162,23 @@ Pulser is not a dependency of this package. If you do not have it installed, pas
 sequence's abstract representation as a JSON string instead. There is no `estimate()`
 counterpart: the cost model reads gate-circuit features that a pulse schedule lacks.
 
+The same sequence runs on real neutral-atom hardware by naming a different engine.
+`analog.pulser.cpu` is the exact local reference, capped at 14 atoms; the two processors
+go far wider than anything that can be simulated exactly, so a run above that ceiling
+returns results and no ZHF certificate:
+
+```python
+job = client.run_sequence(seq, shots=100, engine="qpu.quera.aquila")   # up to 256 atoms
+job = client.run_sequence(seq, shots=20,  engine="qpu.pasqal.fresnel") # up to 100 atoms
+```
+
+Two practical differences from the gate QPUs, both worth knowing before submitting.
+Aquila runs only inside QuEra's published execution windows, so a submission outside one
+is accepted and waits rather than failing. FRESNEL bills machine time rather than shots,
+at roughly four seconds of QPU wall clock per shot, so the 1,024-shot default that is
+nearly free elsewhere would be a very expensive job here; shot counts are capped
+server-side for that reason, and the refusal says so.
+
 ### 5.0.1 Photonic linear optics
 
 Nor does photonic hardware take a circuit in the gate sense. Quandela sells Belenos as a
@@ -301,6 +318,8 @@ Selection can be overridden with the `engine` argument.
 | CPU | `photonic.slos.cpu` | Linear optics (Perceval SLOS) | Photonic. Takes a circuit and an input Fock state, not a gate circuit, so it is never routed to and is named explicitly. Exact, and capped at 12 modes: cost grows with the ways the photons can distribute over the modes, so modes alone understate it. See section 5.0.1 |
 | QPU | `qpu.aqt.ibex` | Real hardware | AQT IBEX Q1 trapped-ion processor, 12 qubits, up to 2,000 shots. Billed at provider cost |
 | QPU | `qpu.quandela.belenos` | Real hardware | Quandela Belenos photonic processor (sold as MosaiQ 12, a 12-qubit machine): up to 24 modes and 12 photons, two modes per qubit under dual-rail encoding, inputs on connected modes only. Billed at provider cost |
+| QPU | `qpu.quera.aquila` | Real hardware | QuEra Aquila neutral-atom processor, up to 256 atoms. Takes the same Pulser sequence as `analog.pulser.cpu`, not a gate circuit, so it is named explicitly. Runs only inside QuEra's published execution windows: a submission outside one is accepted and waits. Billed at provider cost |
+| QPU | `qpu.pasqal.fresnel` | Real hardware | Pasqal FRESNEL neutral-atom processor, up to 100 atoms. Also takes a Pulser sequence. Bills **machine time rather than shots**, so a shot is roughly four seconds of QPU wall clock and the usual 1,024-shot default would be an expensive job; shot counts are capped server-side for that reason. Billed at provider cost |
 
 Two MPS implementations are maintained deliberately. Agreement between independent
 implementations of the same approximation is evidence that neither carries an

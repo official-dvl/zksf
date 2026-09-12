@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1]
+
+### Fixed
+- A submission that the service rejects now raises `JobRejected` carrying the
+  service's own explanation, instead of surfacing as a bare
+  `HTTPStatusError: 404 Not Found` several steps later.
+
+  A submission-time rejection is not an HTTP error. It is a `200` carrying
+  `{"id": ..., "status": "rejected", "reason": "33 qubits needs 128 GiB ..."}`.
+  Every `submit_*` returned only the id and discarded the rest, so the caller
+  went on to poll an id the service declines to serve, and the 404 from that
+  poll was the first thing they saw. The reason was in their hands the whole
+  time.
+
+  This also makes the existing `JobRejected` branch in the polling loop
+  reachable; for submission-time rejections it was dead code, because the poll
+  raised before the status could be read.
+
+  All seven submission methods route through one helper, so `submit`,
+  `submit_batch`, `submit_solve`, `submit_mis`, `submit_parametric_sweep`,
+  `submit_sequence` and `submit_photonic` behave identically and a new one
+  cannot quietly opt out.
+
+### Documentation
+- The engine table listed fifteen of the seventeen engines: both neutral-atom
+  processors, `qpu.quera.aquila` and `qpu.pasqal.fresnel`, were missing. A
+  reader could learn that neutral-atom sequences simulate, and not that the same
+  sequence runs on real hardware, which is an entire modality.
+
+  Section 5.0 now shows the one-line change that sends a Pulser sequence to
+  either processor, and states the two things that differ from the gate QPUs:
+  Aquila runs only inside its published execution windows, and FRESNEL bills
+  machine time rather than shots.
+- `docs/CERTIFICATION.md` now states that ZHF-v0.1 is modality-agnostic and
+  issues certificates for superconducting, trapped-ion, photonic and
+  neutral-atom runs alike, each against its own exact local reference. It also
+  names the consequence: past the reference engine's ceiling a run returns
+  results and no certificate, and that limit belongs to the simulator rather
+  than to the hardware.
+
 ## [0.7.0]
 
 ### Added
