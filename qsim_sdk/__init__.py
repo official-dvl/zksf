@@ -41,6 +41,28 @@ class JobFailed(RuntimeError):
     pass
 
 
+def _job_id(resp: Any) -> str:
+    """The id from a submission, or the rejection it turned out to be.
+
+    A submission-time rejection is not an HTTP error. It is a 200 carrying
+    ``{"id": ..., "status": "rejected", "reason": "33 qubits needs 128 GiB ..."}``.
+    Returning only the id threw that reason away, and the caller then polled an
+    id the service declines to serve, so a perfectly clear refusal reached the
+    user as a bare ``HTTPStatusError: 404 Not Found``.
+
+    Every submit_* method routes its response through here, so all seven paths
+    behave the same way and a new one cannot quietly opt out.
+    """
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get("status") == "rejected":
+        # `reason` is the service's own explanation and is always set on this
+        # path; the fallback exists so a future status shape cannot turn a
+        # rejection into a confusing KeyError.
+        raise JobRejected(body.get("reason") or "job rejected")
+    return body["id"]
+
+
 DEFAULT_BASE_URL = "https://api.zksf.org"
 
 #: The local exact analog engine. Analog jobs always name their engine: routing
@@ -212,8 +234,7 @@ class Client:
                 "params": params,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     def job(self, job_id: str) -> dict[str, Any]:
         resp = self._http.get(f"/jobs/{job_id}")
@@ -243,8 +264,7 @@ class Client:
                 "params": params,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     # ------------------------------------------------------------- problems
 
@@ -286,8 +306,7 @@ class Client:
                 "params": params,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     def solve(
         self,
@@ -341,8 +360,7 @@ class Client:
                 "duration_ns": duration_ns,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     def run_mis(
         self,
@@ -394,8 +412,7 @@ class Client:
                 "params": params,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     def run_parametric_sweep(
         self,
@@ -557,8 +574,7 @@ class Client:
                 "params": params,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     def run_sequence(
         self,
@@ -605,8 +621,7 @@ class Client:
                 "params": params,
             },
         )
-        resp.raise_for_status()
-        return resp.json()["id"]
+        return _job_id(resp)
 
     def run_photonic(
         self,
