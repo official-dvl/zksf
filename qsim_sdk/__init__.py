@@ -21,12 +21,24 @@ Photonic work is a linear-optics circuit and the photons entering it, which
 is two things rather than one, so it takes both:
 
     job = client.run_photonic(perceval_circuit, [1, 0, 1])
+
+The account itself is reachable from code too, so a script never has to open
+the console:
+
+    client.pending()                  # every job that has not finished
+    client.cancel(job_id)             # a hardware job still in its queue
+    client.summary()["spend_usd"]     # net spend this month
+
+The credential is an API key from the console (Profile, Create API key), valid
+for 30 days. Pass it as `token=`, or set ZKSF_TOKEN and pass nothing.
 """
 from __future__ import annotations
 
 import json
+import os
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -39,6 +51,20 @@ class JobRejected(RuntimeError):
 
 class JobFailed(RuntimeError):
     pass
+
+
+class CancelRefused(RuntimeError):
+    """A cancel the service declined, carrying its reason: the job has already
+    started on the device, has finished, or runs where cancelling is not offered."""
+
+
+def _detail(resp: Any) -> str:
+    """The service's own explanation from an error response."""
+    try:
+        detail = resp.json().get("detail")
+    except ValueError:
+        detail = None
+    return str(detail) if detail else resp.text
 
 
 def _job_id(resp: Any) -> str:
@@ -199,8 +225,37 @@ def _to_qasm2(circuit: Any) -> str:
     return qasm2.dumps(qiskit_circuit)
 
 
+def _solve_body(
+    hamiltonian: Sequence[Sequence[Any]],
+    qubits: int,
+    ansatz: str,
+    reps: int,
+    max_iterations: int,
+    shots: int,
+    engine: str | None,
+    seed: int | None,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """One request body for a ground-state search, shared by submitting and pricing it."""
+    return {
+        "hamiltonian": [list(t) for t in hamiltonian],
+        "qubits": qubits,
+        "ansatz": ansatz,
+        "reps": reps,
+        "max_iterations": max_iterations,
+        "shots": shots,
+        "engine": engine,
+        "seed": seed,
+        "params": params,
+    }
+
+
 class Client:
     def __init__(self, base_url: str = DEFAULT_BASE_URL, token: str | None = None):
+        """`token` is an API key from the console (Profile, Create API key). Left
+        out, it is read from the ZKSF_TOKEN environment variable, which keeps the
+        key out of source files."""
+        token = token or os.environ.get("ZKSF_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         self._http = httpx.Client(base_url=base_url, headers=headers, timeout=600.0)
 
@@ -208,7 +263,7 @@ class Client:
         self, circuit: Any, shots: int = 1024, engine: str | None = None
     ) -> dict[str, Any]:
         """Free pre-run check: engine, predicted runtime and cost, or why not.
-        Accepts qiskit, Cirq, PennyLane, pyQuil or Braket circuits."""
+        Accepts Qiskit, Cirq, PennyLane, pyQuil or Braket circuits."""
         resp = self._http.post(
             "/estimate",
             json={"qasm2": _to_qasm2(circuit), "shots": shots, "engine": engine},
@@ -240,6 +295,89 @@ class Client:
         resp = self._http.get(f"/jobs/{job_id}")
         resp.raise_for_status()
         return resp.json()
+
+    # ------------------------------------------------------ jobs and account
+
+    def pending(self) -> dict[str, Any]:
+        """Every job on the account that has not finished, across its whole
+        history: ``{"count": N, "jobs": [...]}``."""
+        resp = self._http.get("/jobs/pending")
+        resp.raise_for_status()
+        return resp.json()
+
+    def jobs(self, limit: int = 50, cursor: str | None = None) -> dict[str, Any]:
+        """One page of the account's jobs, newest first:
+        ``{"jobs": [...], "next_cursor": ...}``. Pass `next_cursor` back as
+        `cursor` for the page before; it is None once the history is exhausted.
+        `iter_jobs` does the walking for you."""
+        params: dict[str, Any] = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        resp = self._http.get("/jobs", params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def iter_jobs(self, page_size: int = 50) -> Iterator[dict[str, Any]]:
+        """Every job on the account, newest first, fetched a page at a time."""
+        cursor: str | None = None
+        while True:
+            page = self.jobs(limit=page_size, cursor=cursor)
+            yield from page.get("jobs") or []
+            cursor = page.get("next_cursor")
+            if not cursor:
+                return
+
+    def cancel(self, job_id: str) -> dict[str, Any]:
+        """Ask the provider to cancel a hardware job still waiting in its queue.
+
+        Returns the job with `cancel_requested_at` set. The charge is refunded
+        once the provider confirms the job never ran; a job that starts before
+        the cancel reaches the device finishes and is charged as normal, and the
+        job says so. Raises CancelRefused with the reason when the job cannot be
+        cancelled.
+        """
+        resp = self._http.post(f"/jobs/{job_id}/cancel")
+        if resp.status_code == 409:
+            raise CancelRefused(_detail(resp))
+        resp.raise_for_status()
+        return resp.json()
+
+    def summary(self, since: float | None = None) -> dict[str, Any]:
+        """Jobs run per tier over the account's whole history, and net spend
+        since `since`.
+
+        `since` is epoch seconds and defaults to the start of the current month
+        in UTC. The console sends the start of the viewer's local month, which a
+        script cannot know, so pass it when your month is not UTC's.
+        """
+        if since is None:
+            now = datetime.now(timezone.utc)
+            since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp()
+        resp = self._http.get("/jobs/summary", params={"since": int(since)})
+        resp.raise_for_status()
+        return resp.json()
+
+    def balance(self) -> float | None:
+        """Available credit in USD, or None where billing is not enabled."""
+        resp = self._http.get("/billing/balance")
+        resp.raise_for_status()
+        return resp.json().get("balance_usd")
+
+    def certificate(self, job_id: str, index: int | None = None) -> dict[str, Any]:
+        """Issue the public certificate for a finished job.
+
+        Returns `cert_id`, `protocol`, `verify_url` and `download_url` (the PDF).
+        Both URLs resolve without an account. For a batch, `index` names the
+        evaluation to certify, since the points of a sweep do not share a bound.
+        """
+        params = {"index": index} if index is not None else None
+        resp = self._http.post(f"/jobs/{job_id}/certificate", params=params)
+        resp.raise_for_status()
+        body = resp.json()
+        download = body.get("download_url")
+        if isinstance(download, str) and download.startswith("/"):
+            body["download_url"] = str(self._http.base_url).rstrip("/") + download
+        return body
 
     # ------------------------------------------------------------- batches
 
@@ -294,19 +432,35 @@ class Client:
         """
         resp = self._http.post(
             "/solve",
-            json={
-                "hamiltonian": [list(t) for t in hamiltonian],
-                "qubits": qubits,
-                "ansatz": ansatz,
-                "reps": reps,
-                "max_iterations": max_iterations,
-                "shots": shots,
-                "engine": engine,
-                "seed": seed,
-                "params": params,
-            },
+            json=_solve_body(hamiltonian, qubits, ansatz, reps, max_iterations, shots, engine, seed, params),
         )
         return _job_id(resp)
+
+    def estimate_solve(
+        self,
+        hamiltonian: Sequence[Sequence[Any]],
+        qubits: int,
+        *,
+        ansatz: str = "real_amplitudes",
+        reps: int = 2,
+        max_iterations: int = 60,
+        shots: int = 1024,
+        engine: str | None = None,
+        seed: int | None = None,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """What a ground-state search would cost, before submitting it.
+
+        Same arguments as `submit_solve`, and free. `estimate` prices a single
+        circuit, whereas a search is many evaluations chosen by the optimiser
+        and, on the neural engines, metered runtime, so it is priced here.
+        """
+        resp = self._http.post(
+            "/solve/estimate",
+            json=_solve_body(hamiltonian, qubits, ansatz, reps, max_iterations, shots, engine, seed, params),
+        )
+        resp.raise_for_status()
+        return resp.json()
 
     def solve(
         self,
@@ -544,7 +698,7 @@ class Client:
         **params: Any,
     ) -> dict[str, Any]:
         """Submit and wait. Raises JobRejected/JobFailed with the reason.
-        Accepts qiskit, Cirq, PennyLane, pyQuil or Braket circuits."""
+        Accepts Qiskit, Cirq, PennyLane, pyQuil or Braket circuits."""
         job_id = self.submit(
             circuit, shots=shots, engine=engine, observable=observable, **params
         )
