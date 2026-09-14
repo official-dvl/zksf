@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0]
+
+### Added
+- Job and account management from code, so nothing needs the console.
+  `pending()` lists every unfinished job, `jobs()` and `iter_jobs()` walk the
+  job history newest first, `cancel(job_id)` asks the provider to cancel a
+  hardware job that has not started, `summary()` returns jobs run per tier and
+  net spend since the start of the month, `balance()` returns available credit,
+  and `certificate(job_id)` issues a finished job's public certificate.
+- `CancelRefused`, raised by `cancel()` carrying the service's reason when a job
+  can no longer be cancelled. A cancelled job is refunded once the provider
+  confirms it never ran.
+- `estimate_solve()`, the price of a ground-state search before submitting it,
+  with the same arguments as `submit_solve()`.
+
+### Changed
+- `Client()` reads `ZKSF_TOKEN` from the environment when no `token` is passed,
+  as `qiskit-zksf` and `pennylane-zksf` already do. An explicit `token` wins.
+- The credential to use is an API key, created in the console under Profile and
+  valid for 30 days. It is passed exactly where a token was.
+
+### Documentation
+- The README engine table lists the two neural engines, names IonQ's current
+  device (Forte Enterprise 1), and states the GPU engine's limit without
+  describing how its jobs are placed. The certification table adds
+  ZCC-Estimate-v0.2, the statement a mitigated value carries.
+- Where to get a credential now points at API keys (Profile, Create API key) in
+  the README and the Rydberg notebook, and the scope section describes the
+  client as it now is rather than a 120-line wrapper of four endpoints.
+- CITATION.cff carries the release version.
+
 ## [0.7.1]
 
 ### Fixed

@@ -35,9 +35,9 @@ independently checkable by a third party.
 
 ## 2. Scope of this repository
 
-This repository contains the **client library only**. It is a thin HTTP wrapper of
-roughly 120 lines: authentication, circuit serialisation to OpenQASM 2, four endpoint
-calls, and a polling loop.
+This repository contains the **client library only**. It is a thin HTTP wrapper:
+authentication, program serialisation (OpenQASM 2, Pulser and Perceval), the job,
+account and certificate endpoints, and polling.
 
 | In this repository | Not in this repository |
 |---|---|
@@ -48,7 +48,7 @@ calls, and a polling loop.
 
 The simulation engines, the router, and the certification computation execute
 server-side and are not open source. The client is published so that users can read
-exactly what is transmitted before supplying an API token.
+exactly what is transmitted before supplying an API key.
 
 ## 3. Installation
 
@@ -73,8 +73,13 @@ client never train anything and it is a large install:
 pip install "qsim-sdk[ml]"
 ```
 
-Obtain an API token from the console at <https://app.zksf.org> (sign in, then
-"Copy API token").
+Create an API key in the console at <https://app.zksf.org> (Profile, then **Create API
+key**). A key is valid for 30 days, is shown once, and can be revoked there at any time.
+Pass it as `token=`, or set the `ZKSF_TOKEN` environment variable and pass nothing:
+
+```bash
+export ZKSF_TOKEN=zksf_...
+```
 
 ## 4. Quick start
 
@@ -84,7 +89,7 @@ The notebook above runs in the browser with nothing installed. Its first half ne
 account and spends nothing: it reads four real, already-completed certified runs from the
 public API, covering exact simulation, an approximate run with a measured bound, a
 192-qubit Pauli propagation result, and a Bell state executed on IonQ Forte-1 hardware.
-The second half runs new jobs against your own token.
+The second half runs new jobs with your own API key.
 
 Six algorithm tutorials follow the same pattern, one per notebook: build the circuit, then
 read the certificate for the run that produced the published result. See
@@ -134,9 +139,17 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 | `run_parametric_sweep(program, bindings, ...)` | `submit_parametric_sweep` followed by polling | Billed per point |
 | `solve(hamiltonian, qubits, ...)` / `submit_solve(...)` | A ground-state problem rather than a program: the service runs the variational loop | Billed per evaluation |
 | `run_mis(vertices, ...)` / `submit_mis(...)` | Maximum independent set on a neutral-atom register | Billed as one analog job |
+| `estimate_solve(hamiltonian, qubits, ...)` | The price of a ground-state search before submitting it | Free |
+| `pending()` | Every job on the account that has not finished | Free |
+| `jobs(limit, cursor)` / `iter_jobs()` | The account's job history, newest first | Free |
+| `cancel(job_id)` | Cancel a hardware job still waiting in its provider's queue | Refunded once the provider confirms it never ran |
+| `summary(since=None)` | Jobs run per tier, and net spend since the start of the month | Free |
+| `balance()` | Available credit in USD | Free |
+| `certificate(job_id, index=None)` | Issue a finished job's public certificate: verify URL and PDF | Free |
 
 `Client(base_url="https://api.zksf.org", token=None)`. The base URL is overridable for
-self-hosted or staging deployments.
+self-hosted or staging deployments, and `token` falls back to the `ZKSF_TOKEN` environment
+variable.
 
 ### 5.0 Neutral-atom sequences
 
@@ -159,8 +172,8 @@ print(job["result"]["counts"])      # a bit reads 1 when that atom ended in Rydb
 ```
 
 Pulser is not a dependency of this package. If you do not have it installed, pass the
-sequence's abstract representation as a JSON string instead. There is no `estimate()`
-counterpart: the cost model reads gate-circuit features that a pulse schedule lacks.
+sequence's abstract representation as a JSON string instead. `estimate()` takes gate
+circuits only, so there is no SDK price check for a sequence yet.
 
 The same sequence runs on real neutral-atom hardware by naming a different engine.
 `analog.pulser.cpu` is the exact local reference, capped at 14 atoms; the two processors
@@ -280,6 +293,7 @@ The client raises rather than returning a result that cannot be trusted:
 |---|---|
 | `qsim_sdk.JobRejected` | The circuit is intractable or infeasible under the request. The message states why, and what change would make it feasible |
 | `qsim_sdk.JobFailed` | An engine error or a hardware-provider error |
+| `qsim_sdk.CancelRefused` | `cancel()` was declined: the job has started, has finished, or runs where cancelling is not offered. The message says which |
 | `TimeoutError` | The job did not reach a terminal state within `timeout` seconds |
 
 Rejection is deliberate. A circuit that would return an inconclusive answer is refused
@@ -309,10 +323,10 @@ Selection can be overridden with the `engine` argument.
 | CPU | `mps.aer.cpu` | Tensor network (Aer) | An independent MPS implementation, retained for cross-checking against the quimb engine |
 | CPU | `pauli.cpu` | Pauli propagation | Expectation values rather than sampled counts. Supported gates: `h`, `cx`, `cz`, `swap`, `rx`, `ry`, `rz`, `rzz`, `rxx`, `ryy`, `x`, `y`, `z`, `s`, `t`, and their inverses |
 | CPU | `noisy.cpu` | Density matrix or statevector with a noise model | Device-noise preview, superconducting model by default, optional zero-noise error mitigation. Same 30-qubit ceiling. **Not certifiable, see section 7** |
-| GPU | `exact.gpu` | Aer CUDA statevector | Exact, to 32 qubits. Size-routed across two tiers: up to 30 qubits on the 24 GB card, 31 to 32 on the larger card, which costs more per GPU-hour. Routing is automatic; you name `exact.gpu` either way |
+| GPU | `exact.gpu` | Aer CUDA statevector | Exact, to 32 qubits |
 | CPU | `analog.pulser.cpu` | Rydberg dynamics (QuTiP) | Neutral-atom analog. Takes a Pulser sequence, not a circuit, so it is never routed to and is named explicitly. Exact: the state is integrated without truncation, and the register is capped at 14 atoms. See section 5.0 |
-| QPU | `qpu.rigetti` | Real hardware | Rigetti Cepheus superconducting processor. Billed at provider cost |
-| QPU | `qpu.ionq` | Real hardware | IonQ Forte-1 trapped-ion processor, 36 qubits, 100 to 5,000 shots. Billed at provider cost |
+| QPU | `qpu.rigetti` | Real hardware | Rigetti Cepheus superconducting processor, 108 qubits. Billed at provider cost |
+| QPU | `qpu.ionq` | Real hardware | IonQ Forte Enterprise 1 trapped-ion processor, 36 qubits, 100 to 5,000 shots. Billed at provider cost |
 | QPU | `qpu.iqm.garnet` | Real hardware | IQM Garnet superconducting processor, 20 qubits, up to 20,000 shots. Billed at provider cost |
 | QPU | `qpu.iqm.emerald` | Real hardware | IQM Emerald superconducting processor, 54 qubits, up to 20,000 shots. Billed at provider cost |
 | CPU | `photonic.slos.cpu` | Linear optics (Perceval SLOS) | Photonic. Takes a circuit and an input Fock state, not a gate circuit, so it is never routed to and is named explicitly. Exact, and capped at 12 modes: cost grows with the ways the photons can distribute over the modes, so modes alone understate it. See section 5.0.1 |
@@ -320,6 +334,8 @@ Selection can be overridden with the `engine` argument.
 | QPU | `qpu.quandela.belenos` | Real hardware | Quandela Belenos photonic processor (sold as MosaiQ 12, a 12-qubit machine): up to 24 modes and 12 photons, two modes per qubit under dual-rail encoding, inputs on connected modes only. Billed at provider cost |
 | QPU | `qpu.quera.aquila` | Real hardware | QuEra Aquila neutral-atom processor, up to 256 atoms. Takes the same Pulser sequence as `analog.pulser.cpu`, not a gate circuit, so it is named explicitly. Runs only inside QuEra's published execution windows: a submission outside one is accepted and waits. Billed at provider cost |
 | QPU | `qpu.pasqal.fresnel` | Real hardware | Pasqal FRESNEL neutral-atom processor, up to 100 atoms. Also takes a Pulser sequence. Bills **machine time rather than shots**, so a shot is roughly four seconds of QPU wall clock and the usual 1,024-shot default would be an expensive job; shot counts are capped server-side for that reason. Billed at provider cost |
+| CPU | `neural.cpu` | Neural-network wavefunction (variational Monte Carlo) | Ground states rather than circuits: takes a Hamiltonian through `solve()`, up to 40 spins. A circuit sent to it is refused |
+| TPU | `neural.tpu` | The same method on a Google TPU | The same results and bound as `neural.cpu`. Billed by runtime, with start-up included in the quoted price and unused seconds refunded; price it first with `estimate_solve()` |
 
 Two MPS implementations are maintained deliberately. Agreement between independent
 implementations of the same approximation is evidence that neither carries an
@@ -338,6 +354,7 @@ Two protocols are defined. Both are described in full, with worked figures, in
 |---|---|---|
 | **ZCC-v0.1** | Simulated results | An error bound on the returned distribution |
 | **ZHF-v0.1** | Quantum-hardware results | Measured fidelity against the exact ideal distribution |
+| **ZCC-Estimate-v0.2** | Error-mitigated values (`mitigate=True`) | A statistical uncertainty on the mitigated value, not a bound |
 
 ZCC-v0.1 covers `exact.cpu`, `exact.gpu`, `clifford`, `mps.quimb.cpu`, `mps.aer.cpu`,
 and `pauli.cpu`. It does **not** cover `noisy.cpu`, for the reason given in section 8.
@@ -371,7 +388,7 @@ boundaries:
    not predict the fidelity of a subsequent run.
 5. Direct verification requires an obtainable reference distribution, which constrains
    the circuit sizes for which ZHF-v0.1 can be evaluated in its direct mode.
-6. Protocol versions are pinned in the identifier (`v0.1`). Version numbers below 1.0
+6. Protocol versions are pinned in the identifier (`v0.1`, `v0.2`). Version numbers below 1.0
    indicate that the specifications are not yet frozen.
 7. **Parameter sweeps run on simulation engines only.** Hardware is refused rather than
    silently fanned out: each provider task is queued and billed individually, so a
