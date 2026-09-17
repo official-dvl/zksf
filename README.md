@@ -101,6 +101,11 @@ read the certificate for the run that produced the published result. See
 [Bernstein-Vazirani](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/bernstein-vazirani.ipynb) ·
 [Teleportation](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/quantum-teleportation.ipynb)
 
+The seventh is not a gate algorithm and is listed separately for that reason:
+[Rydberg antiferromagnetic chain](https://colab.research.google.com/github/official-dvl/zksf/blob/main/examples/tutorials/rydberg-antiferromagnetic-chain.ipynb)
+builds a pulse schedule on a neutral-atom register rather than a circuit, so the thing
+you vary is the geometry and the drive, not a sequence of gates.
+
 ```python
 import qsim_sdk
 from qiskit import QuantumCircuit
@@ -124,7 +129,8 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 
 | Method | Purpose | Cost |
 |---|---|---|
-| `estimate(circuit, shots, engine=None)` | Predicted engine, runtime, and price, or the reason the circuit is infeasible | Free |
+| `estimate(circuit, shots, engine=None)` | Predicted engine, runtime, and price for ONE circuit, or the reason it is infeasible | Free |
+| `estimate_batch(circuits, shots, engine=None)` | The same for a whole sweep: total, per point, and how many batches it takes | Free |
 | `submit(circuit, shots, engine=None, ...)` | Enqueue a job, returns a job id | Billed on completion |
 | `job(job_id)` | Poll a job record | Free |
 | `run(circuit, shots, engine=None, ...)` | `submit` followed by polling until terminal state | Billed on completion |
@@ -284,6 +290,31 @@ usually reading noise rather than a flat landscape.
 predicted wall-clock seconds, the predicted cost in USD, and the reason for that
 selection. Calling it before `run()` is the recommended pattern for any circuit whose
 cost is not already known.
+
+**`estimate()` prices one circuit. A sweep is priced by `estimate_batch()`.** The
+minimum charge applies per circuit, so a 600-point sweep is 600 minimums, and
+reading the single-circuit figure as the cost of the sweep understates it by a
+factor of the point count:
+
+```python
+est = client.estimate_batch(circuits, shots=1024, engine="exact.cpu")
+est["total_usd"]      # what the account will be debited
+est["per_point_usd"]  # and where it goes; a sweep is not uniform
+est["batches"]        # how many submissions run_batch will take
+```
+
+Sweeps longer than one batch are chunked and summed, so asking about 12,000
+circuits returns the real total rather than a refusal.
+
+### 5.1.1 The first job on an idle engine
+
+The first job sent to an engine after a quiet period takes noticeably longer to
+start than the ones that follow it. Later jobs on the same engine are faster.
+
+The SDK prints one line to stderr once a job has waited more than 15 seconds, so
+a notebook cell that has printed nothing is not mistaken for a broken service.
+`ZKSF_SLOW_JOB_SECONDS` changes the threshold, and `Client(on_poll=...)` drives
+your own progress output instead.
 
 ### 5.2 Failure semantics
 

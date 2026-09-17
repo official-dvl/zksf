@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0]
+
+### Added
+- `estimate_batch(circuits, ...)`, a free pre-run price for a whole sweep
+  rather than for one circuit. `estimate()` prices a single circuit and the
+  minimum is charged per circuit, so a 600-point sweep is 600 minimums and the
+  multiplication was the caller's to remember. It returns `total_usd`, the
+  per-point breakdown (a sweep is not uniform: a tensor-network or
+  linear-optics run costs what its bound values make it cost), and `batches`,
+  the number of submissions the sweep will take. Sweeps longer than the
+  service's per-batch limit are chunked and summed, because the sweep worth
+  pricing is exactly the long one.
+- `Client(on_poll=...)`, called as `on_poll(job_id, status, elapsed_seconds)`
+  on every poll while a job waits, for callers building progress output.
+
+### Changed
+- A job that has waited more than 15 seconds now prints one line to stderr
+  saying so, once per wait rather than per poll. The first job sent to an engine
+  after a quiet period takes noticeably longer to start, and a notebook cell
+  that has printed nothing for half a minute reads as a broken service. stderr
+  so it never contaminates piped stdout; `ZKSF_SLOW_JOB_SECONDS` changes the
+  threshold.
+
+### Fixed
+- `PhotonicLayer` and `SequenceLayer` raise at construction when the program
+  produces no outcomes, instead of building a layer whose every gradient is
+  zero. A register built with `Register.from_coordinates` is refused by the
+  service with a precise diagnostic; the layer discarded it, constructed
+  happily, and then trained forever without moving. The failure tolerance that
+  belongs in the gradient sweep, where one bad point among 2P must not throw
+  away the rest, had been applied to the single probe run that learns the
+  outcome list, where an empty result means the layer is permanently dead. The
+  service's own reason is now carried out in the exception.
+
 ## [0.8.0]
 
 ### Added
