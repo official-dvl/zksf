@@ -80,6 +80,41 @@ class _ProgramLayer:
             return {}
         return {k: v / total for k, v in counts.items()}
 
+    def _probe_outcomes(self, item: dict[str, Any]) -> list[str]:
+        """The outcome labels this program can produce, or a clear failure.
+
+        `_distribution` returns {} for a point that produced nothing, and that
+        is right in the gradient sweep: one bad point among 2P must not throw
+        away the 2P-1 that succeeded.
+
+        A PROBE is different. It is a single point run once at construction to
+        learn the outcome list, so {} here means `sorted({})` is `[]` and the
+        layer has no outcomes at all. Every forward pass then returns an empty
+        tensor, every gradient is zero, and nothing raises. The user trains for
+        hours, watches the loss sit still, and concludes quantum ML does not
+        work.
+
+        That is what happened to a register built with
+        `Register.from_coordinates`: the API refused it with a precise
+        diagnostic, `SequenceLayer` swallowed it, constructed happily, and was
+        permanently dead. So the tolerance stays in the sweep and stops here,
+        and the server's own reason is carried out rather than discarded.
+        """
+        dist = self._distribution(item)
+        if dist:
+            return sorted(dist)
+        detail = (
+            item.get("error")
+            or item.get("reason")
+            or (item.get("result") or {}).get("reason")
+            or f"status {item.get('status')!r} and no counts"
+        )
+        raise RuntimeError(
+            f"this layer produced no outcomes, so every gradient would be zero "
+            f"and training would appear to run while doing nothing. The service "
+            f"said: {detail}"
+        )
+
     def _vectors_to_probs(self, vectors: Sequence[Sequence[float]]):
         torch = _torch()
         job = self._submit(vectors)
@@ -183,7 +218,7 @@ class PhotonicLayer:
                 """One run at the initial parameters, to learn which Fock states
                 this circuit and input can produce."""
                 job = self._submit([self.theta.detach().tolist()])
-                return sorted(self._distribution(job[0]))
+                return self._probe_outcomes(job[0])
 
             def _submit(self, vectors):
                 bindings = [dict(zip(self.param_names, v)) for v in vectors]
@@ -253,7 +288,7 @@ class SequenceLayer:
 
             def _probe(self) -> list[str]:
                 job = self._submit([self.theta.detach().tolist()])
-                return sorted(self._distribution(job[0]))
+                return self._probe_outcomes(job[0])
 
             def _submit(self, vectors):
                 bindings = [dict(zip(self.param_names, v)) for v in vectors]
