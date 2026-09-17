@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from collections.abc import Iterator, Sequence
 from datetime import datetime, timezone
@@ -90,6 +91,18 @@ def _job_id(resp: Any) -> str:
 
 
 DEFAULT_BASE_URL = "https://api.zksf.org"
+
+#: How long a job may sit before the SDK says so on stderr. The first job sent
+#: to an engine after a quiet period takes noticeably longer to start, and a
+#: notebook cell that has printed nothing for this long reads as a broken
+#: service. Once per wait, never per poll.
+SLOW_JOB_SECONDS = float(os.environ.get("ZKSF_SLOW_JOB_SECONDS", "15"))
+
+#: Points the service accepts in one batch. Used here to chunk a long sweep
+#: when PRICING it: a submission is capped because one job holds its points,
+#: and a quote has no such limit, so asking about 12,000 circuits should return
+#: a total rather than a refusal.
+MAX_BATCH_CIRCUITS = 200
 
 #: The local exact analog engine. Analog jobs always name their engine: routing
 #: inspects gate-circuit features, and a pulse schedule has none of them.
@@ -251,13 +264,53 @@ def _solve_body(
 
 
 class Client:
-    def __init__(self, base_url: str = DEFAULT_BASE_URL, token: str | None = None):
+    def __init__(
+        self,
+        base_url: str = DEFAULT_BASE_URL,
+        token: str | None = None,
+        on_poll: Any = None,
+    ):
         """`token` is an API key from the console (Profile, Create API key). Left
         out, it is read from the ZKSF_TOKEN environment variable, which keeps the
-        key out of source files."""
+        key out of source files.
+
+        `on_poll(job_id, status, elapsed_seconds)` is called on every poll while
+        a job is waiting, for callers building a progress bar.
+        """
         token = token or os.environ.get("ZKSF_TOKEN")
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         self._http = httpx.Client(base_url=base_url, headers=headers, timeout=600.0)
+        self.on_poll = on_poll
+
+    def _polling(self, job_id: str, status: str, elapsed: float, warned: bool) -> bool:
+        """Report that a job is still waiting. Returns whether it has warned yet.
+
+        Two audiences, and the callback alone does not serve both. `on_poll`
+        helps a caller who already suspects there is something to wire up. The
+        person who actually needs this is the newcomer watching a notebook cell
+        that has not printed anything for half a minute, and deciding the
+        service is broken. The first job sent to an engine after a quiet period
+        takes noticeably longer to start, so that silence is expected and
+        completely invisible.
+
+        Once per wait, not per poll, and on stderr so it never contaminates
+        piped stdout.
+        """
+        if self.on_poll is not None:
+            try:
+                self.on_poll(job_id, status, elapsed)
+            except Exception:  # noqa: BLE001 - a progress bar must not kill a job
+                pass
+        if not warned and elapsed >= SLOW_JOB_SECONDS:
+            print(
+                f"[qsim-sdk] job {job_id} is still {status} after {elapsed:.0f}s. "
+                f"The first job sent to an engine after a quiet period takes "
+                f"longer to start; later jobs are faster.",
+                file=sys.stderr,
+                flush=True,
+            )
+            return True
+        return warned
 
     def estimate(
         self, circuit: Any, shots: int = 1024, engine: str | None = None
@@ -270,6 +323,75 @@ class Client:
         )
         resp.raise_for_status()
         return resp.json()
+
+    def estimate_batch(
+        self,
+        circuits: Sequence[Any] | None = None,
+        shots: int = 1024,
+        engine: str | None = None,
+        *,
+        program: str | None = None,
+        bindings: Sequence[dict] | None = None,
+        program_kind: str = "qasm2",
+    ) -> dict[str, Any]:
+        """Free pre-run check for a whole sweep, not one circuit.
+
+            est = client.estimate_batch(circuits, engine="exact.cpu")
+            est["total_usd"]        # what the account will be debited
+            est["per_point_usd"]    # and where it goes
+
+        `estimate` prices ONE circuit, and the minimum is charged per circuit,
+        so a 600-point sweep is 600 floors. Multiplying it yourself is the step
+        that is easy to miss and expensive to miss: use this instead whenever
+        you are about to call `run_batch` or `run_sweep`.
+
+        Takes the same two shapes `run_batch` does: a list of circuits, or one
+        parameterised `program` plus `bindings`.
+
+        Sweeps longer than the service's per-batch limit are chunked and summed
+        here. A submission is capped because one job holds its points; a QUOTE
+        has no such constraint, and the sweep worth pricing is exactly the long
+        one. Asking about 12,000 circuits and getting a refusal would send the
+        caller back to multiplying by hand, which is the mistake this method
+        exists to remove.
+        """
+        points: list = ([] if program is not None
+                        else [_to_qasm2(c) for c in (circuits or [])])
+        binds: list = list(bindings or []) if program is not None else []
+        n = len(binds) if program is not None else len(points)
+        if n == 0:
+            raise ValueError("estimate_batch needs circuits, or a program and bindings")
+
+        total, per_point, engine_seen = 0.0, [], None
+        for start in range(0, n, MAX_BATCH_CIRCUITS):
+            body: dict[str, Any] = {"shots": shots, "engine": engine,
+                                    "program_kind": program_kind}
+            if program is not None:
+                body["program"] = program
+                body["bindings"] = binds[start:start + MAX_BATCH_CIRCUITS]
+            else:
+                body["circuits"] = points[start:start + MAX_BATCH_CIRCUITS]
+            resp = self._http.post("/estimate/batch", json=body)
+            resp.raise_for_status()
+            chunk = resp.json()
+            total += chunk["total_usd"]
+            per_point.extend(chunk["per_point_usd"])
+            engine_seen = chunk["engine"]
+
+        chunks = (n + MAX_BATCH_CIRCUITS - 1) // MAX_BATCH_CIRCUITS
+        return {
+            "engine": engine_seen,
+            "points": n,
+            "total_usd": round(total, 6),
+            "per_point_usd": per_point,
+            "shots": shots,
+            # A submission of this sweep is this many jobs, which is worth
+            # knowing before you write the loop that sends them.
+            "batches": chunks,
+            "reason": f"{n} points"
+                      + (f" on '{engine_seen}'" if engine_seen else "")
+                      + (f", priced in {chunks} requests" if chunks > 1 else ""),
+        }
 
     def submit(
         self,
@@ -620,7 +742,9 @@ class Client:
     def _wait_all(self, job_id: str, poll_seconds: float, timeout: float) -> dict[str, Any]:
         """Poll a multi-point job. Unlike `_wait`, a failed *point* is not an
         error: only the job as a whole failing is."""
-        deadline = time.monotonic() + timeout
+        started = time.monotonic()
+        deadline = started + timeout
+        warned = False
         while time.monotonic() < deadline:
             job = self.job(job_id)
             if job["status"] == "done":
@@ -629,6 +753,9 @@ class Client:
                 raise JobRejected(job.get("reason"))
             if job["status"] == "error":
                 raise JobFailed(job.get("error"))
+            warned = self._polling(
+                job_id, job["status"], time.monotonic() - started, warned
+            )
             time.sleep(poll_seconds)
         raise TimeoutError(f"batch {job_id} still running after {timeout}s")
 
@@ -675,7 +802,9 @@ class Client:
 
     def _wait(self, job_id: str, poll_seconds: float, timeout: float) -> dict[str, Any]:
         """Poll until the job reaches a terminal state, or raise saying why."""
-        deadline = time.monotonic() + timeout
+        started = time.monotonic()
+        deadline = started + timeout
+        warned = False
         while time.monotonic() < deadline:
             job = self.job(job_id)
             if job["status"] == "done":
@@ -684,6 +813,9 @@ class Client:
                 raise JobRejected(job["reason"])
             if job["status"] == "error":
                 raise JobFailed(job["error"])
+            warned = self._polling(
+                job_id, job["status"], time.monotonic() - started, warned
+            )
             time.sleep(poll_seconds)
         raise TimeoutError(f"job {job_id} still running after {timeout}s")
 
