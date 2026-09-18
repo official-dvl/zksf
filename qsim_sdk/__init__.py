@@ -604,6 +604,166 @@ class Client:
         job_id = self.submit_solve(hamiltonian, qubits, **kwargs)
         return self._wait(job_id, poll_seconds, timeout)
 
+    def submit_tomography(
+        self,
+        n_spins: int,
+        bases: Sequence[str],
+        outcomes: Sequence[Sequence[int]],
+        *,
+        engine: str | None = None,
+        max_seconds: float | None = None,
+        **params: Any,
+    ) -> str:
+        """Reconstruct the state a device prepared, from its shots.
+
+            job = client.run_tomography(2, bases, outcomes)
+            job["result"]["agreement"]["agreed"]      # of how many checked
+
+        `bases[i]` is the basis shot i was measured in, one character per qubit
+        over X, Y and Z; `outcomes[i]` is what came back, as +1 and -1 rather
+        than 0 and 1.
+
+        READ THIS BEFORE USING THE ANSWER. A maximum-likelihood fit has no
+        equivalent of the variational principle, so **nothing here bounds the
+        distance between the reconstruction and the state your device actually
+        prepared**, and `result["certifiable"]` is always False. What IS bounded
+        is agreement with records the fit never saw: the reconstruction
+        reproduces the measured expectations to within a stated interval at a
+        stated confidence.
+
+        The submission is REFUSED when the bases cannot determine a state, and
+        that refusal is the most useful thing here. An under-determined fit
+        converges perfectly well onto the wrong state and nothing downstream can
+        tell: measured on a Bell state, five bases gave fidelity 0.51 and all
+        nine gave 0.98 at identical settings.
+        """
+        resp = self._http.post(
+            "/tomography",
+            json={
+                "n_spins": int(n_spins),
+                "bases": [str(b).upper() for b in bases],
+                "outcomes": [[int(v) for v in shot] for shot in outcomes],
+                "engine": engine,
+                "max_seconds": max_seconds,
+                "params": params,
+            },
+        )
+        return _job_id(resp)
+
+    def run_tomography(
+        self,
+        n_spins: int,
+        bases: Sequence[str],
+        outcomes: Sequence[Sequence[int]],
+        *,
+        poll_seconds: float = 0.5,
+        timeout: float = 3600.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Submit measurement records and wait for the reconstruction."""
+        job_id = self.submit_tomography(n_spins, bases, outcomes, **kwargs)
+        return self._wait(job_id, poll_seconds, timeout)
+
+    def submit_solve_batch(
+        self,
+        problems: Sequence[dict[str, Any]],
+        *,
+        engine: str | None = None,
+        max_seconds: float | None = None,
+        **params: Any,
+    ) -> str:
+        """Many ground states on ONE machine; returns a job id.
+
+            problems = [{"qubits": 8, "hamiltonian": h(j)} for j in couplings]
+            job = client.run_solve_batch(problems, engine="neural.tpu")
+
+        WHY THIS IS NOT A LOOP OVER `solve`. On a TPU roughly 522 seconds of
+        every job is the machine being created and deleted, against about 113
+        seconds of work. A phase diagram sent one Hamiltonian at a time spends
+        four fifths of its money on provisioning; sent here that is paid once.
+        `neural.cpu` accepts the same call and returns the same shape, because
+        there is nothing to provision and therefore nothing to save, so the
+        engine is a choice rather than a rewrite.
+
+        Each point is independent. One that fails is reported in place with its
+        reason and the others still return, and a point that never starts
+        before the machine's wall-clock ceiling comes back as `skipped`.
+        Anything that produced no result is refunded.
+
+        `params` applies to every point and a point's own value wins, so a
+        sweep over the ansatz width is one submission:
+
+            problems = [{"qubits": 8, "hamiltonian": h, "alpha": a}
+                        for a in (1, 2, 4, 8)]
+
+        Price it first with `estimate_solve_batch`. The total is not one
+        point's price times the number of points: provisioning does not
+        multiply, and the per-circuit minimum does.
+        """
+        resp = self._http.post(
+            "/solve/batch",
+            json={
+                "problems": [dict(p) for p in problems],
+                "engine": engine,
+                "max_seconds": max_seconds,
+                "params": params,
+            },
+        )
+        return _job_id(resp)
+
+    def estimate_solve_batch(
+        self,
+        problems: Sequence[dict[str, Any]],
+        *,
+        engine: str | None = None,
+        max_seconds: float | None = None,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """What a batch of ground-state searches would cost. Free.
+
+            est = client.estimate_solve_batch(problems, engine="neural.tpu")
+            est["total_usd"]           # what the account is debited at submit
+            est["per_point_usd"]       # and where it goes
+            est["predicted_seconds"]   # how long the machine is held
+
+        Worth calling rather than multiplying: provisioning is charged once for
+        the whole batch while the per-circuit minimum is charged per point, so
+        the total is neither one job's price nor N of them.
+        """
+        resp = self._http.post(
+            "/solve/batch/estimate",
+            json={
+                "problems": [dict(p) for p in problems],
+                "engine": engine,
+                "max_seconds": max_seconds,
+                "params": params,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def run_solve_batch(
+        self,
+        problems: Sequence[dict[str, Any]],
+        *,
+        poll_seconds: float = 0.5,
+        timeout: float = 3600.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Submit many ground-state problems and wait for all of them.
+
+        `job["result"]["results"]` comes back in submission order, so point i
+        is the answer to `problems[i]`. Check each one's `status` before its
+        `energy`: a failed point is reported rather than raised, the same way
+        a circuit batch reports one, because an optimiser or a sweep wants a
+        bad point marked rather than the whole run lost.
+
+        The default timeout is an hour rather than the half hour `solve` uses,
+        because a batch is many searches on one machine.
+        """
+        job_id = self.submit_solve_batch(problems, **kwargs)
+        return self._wait(job_id, poll_seconds, timeout)
+
     def submit_mis(
         self,
         vertices: Sequence[Sequence[float]],
