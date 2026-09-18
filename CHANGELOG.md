@@ -6,6 +6,85 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0]
+
+### Added
+- `qsim_sdk.ml.CircuitLayer`, a parameterised Qiskit circuit as a torch
+  `nn.Module`. The gate-circuit member of a family that previously had only
+  `PhotonicLayer` and `SequenceLayer`, which left out the form most quantum
+  machine learning is written in: variational classifiers, circuit Born
+  machines, the generator half of a GAN, the sub-generators of a patch GAN.
+  Writing one meant hand-rolling central differences, batching and an autograd
+  Function first, about 150 lines before any of the model.
+
+  Parameters are bound client-side, because OpenQASM 2 cannot carry an unbound
+  one, so the wire only ever sees bound circuits.
+
+- **Data inputs.** `inputs=` names the circuit parameters that carry a data
+  point; every other parameter is a trainable weight. Without the split, an
+  encoding angle would be optimised as though it were a weight, which is wrong
+  rather than merely awkward, and a classifier could not be expressed at all.
+  The two halves are assembled by name, so declaring an input reorders nothing.
+
+- **Minibatches.** `forward(x)` takes `(features,)` and returns a probability
+  vector, or `(batch, features)` and returns `(batch, outcomes)`. A whole
+  minibatch is ONE submission and its gradient is ONE more, whatever the batch
+  size: B samples over P weights is B points forward and B x 2P backward. Sent
+  a sample at a time the same step is 2B submissions, each paying its own queue
+  entry and its own per-circuit minimum.
+
+  Know what a step costs before a long run: 32 samples over 8 weights is 544
+  circuits per step. `estimate_batch` prices it.
+
+- **`run_solve_batch` / `submit_solve_batch` / `estimate_solve_batch`.** Many
+  ground states on ONE machine. On a TPU roughly 522 seconds of every job is
+  the machine being created and deleted, against about 113 seconds of work, so
+  a phase diagram sent one Hamiltonian at a time spends four fifths of its
+  money on provisioning. Sent together it is paid once, and the estimate shows
+  the per-point breakdown because the total is neither one job's price nor N of
+  them: provisioning does not multiply and the per-circuit minimum does.
+
+  Each point is independent. One that fails is reported in place with its
+  reason and the others still return; anything that produced no result is
+  refunded. `params` applies to every point and a point's own value wins, so a
+  sweep over the ansatz is one submission.
+
+- **`ansatz="rbm_symm"`** on any ground-state call: a translation-symmetric
+  network. On a 6-spin transverse-field Ising ring it landed 0.0018 above the
+  exact ground state against the plain network's 0.0067, with a sixth of the
+  parameters. It is REFUSED unless the Hamiltonian actually has that symmetry,
+  checked rather than assumed, because a symmetric network cannot represent the
+  ground state of a Hamiltonian that breaks the symmetry and would report a
+  ceiling that is honest and far too high.
+
+- **`run_tomography` / `submit_tomography`.** Reconstruct the state a device
+  prepared, from its measurement records.
+
+  A reconstruction is not eligible for ZKSF certification and does not carry a
+  fidelity bound; `result["certifiable"]` is False and requesting a certificate
+  returns 409. It carries measured agreement instead, under `agreement`: every
+  observable reproduced to within a stated interval at a stated confidence,
+  scored on records the fit never saw.
+
+  The submission is refused when the bases cannot determine a state. An
+  under-determined fit converges perfectly well onto the wrong state and nothing
+  downstream can tell: measured on a Bell state at identical settings, five
+  bases gave fidelity 0.51 and all nine gave 0.98.
+
+### Notes
+- Gradients are taken with respect to the weights, not the inputs. An input
+  tensor carrying `requires_grad` is refused with a clear error rather than
+  silently given no gradient, because a classical network placed in front of
+  the layer would otherwise never train while appearing to.
+- `CircuitLayer` refuses a circuit with no measurements at construction. The
+  failure it would otherwise produce is empty counts, which reads as a broken
+  engine rather than as a circuit that was never asked for an answer.
+- The outcome list is learned from one probe at the initial parameters, with
+  data parameters probed at zero. A circuit initialised near a basis state may
+  not produce most of its bitstrings in that single run, so pass `outcomes=`
+  whenever the output space is known, which for n measured qubits is every
+  n-bit string.
+
 ## [0.9.0]
 
 ### Added

@@ -263,9 +263,14 @@ queued and billed individually, so batching to a QPU would hide the per-task cos
 one job id rather than save anything. Settle the sweep in simulation, then send the
 surviving point to the machine.
 
-**As a torch layer.** `qsim_sdk.ml` wraps either kind as an `nn.Module`, so a quantum
-program becomes a differentiable layer in an ordinary PyTorch model. The forward pass is
-one job; the backward pass is one job carrying two points per parameter.
+**As a torch layer.** `qsim_sdk.ml` wraps a quantum program as an `nn.Module`, so it
+becomes a differentiable layer in an ordinary PyTorch model. There are three, one per
+kind of program: `CircuitLayer` for a gate circuit, `PhotonicLayer` for a linear-optical
+mesh, `SequenceLayer` for an analog pulse sequence. They differ only in what they
+submit, so a model written against one ports to another by changing the constructor.
+
+The forward pass is one job; the backward pass is one job carrying two points per
+parameter.
 
 ```python
 from qsim_sdk.ml import PhotonicLayer          # pip install qsim-sdk[ml]
@@ -278,11 +283,97 @@ for step in range(200):
     opt.step()
 ```
 
+**A model that reads data declares which parameters carry it.** Without that split every
+angle in the circuit is a trainable weight, so an encoding angle would be optimised as
+though it were one. Name the data parameters and the rest are the weights:
+
+```python
+from qiskit.circuit import ParameterVector
+from qsim_sdk.ml import CircuitLayer
+
+x = ParameterVector("x", 2)                    # the data point
+w = ParameterVector("w", 4)                    # the trainable part
+qc = QuantumCircuit(2)
+qc.ry(x[0], 0); qc.ry(x[1], 1)
+qc.ry(w[0], 0); qc.ry(w[1], 1); qc.cx(0, 1)
+qc.ry(w[2], 0); qc.ry(w[3], 1)
+qc.measure_all()
+
+layer = CircuitLayer(client, qc, inputs=[p.name for p in x], shots=1024)
+probs = layer(X)                               # X is (batch, 2) -> (batch, outcomes)
+```
+
+A whole minibatch is one job and its gradient is one more, whatever the batch size: `B`
+samples over `P` weights is `B` points forward and `B * 2P` backward. Sent one sample at
+a time the same step is `2B` submissions, each paying its own queue entry and its own
+per-circuit minimum. Know what a step costs before a long run, with `estimate_batch`: 32
+samples over 8 weights is 544 circuits per step.
+
 Gradients are central differences, not the parameter-shift rule: the shift rule is exact
 only where an output is a sinusoid of the parameter, which is true of a Pauli rotation
 and false of a beamsplitter angle or a pulse amplitude. Shot noise sets the floor on how
 small a gradient you can resolve, so an optimiser that stalls at low shot counts is
 usually reading noise rather than a flat landscape.
+
+Gradients are taken with respect to the weights, not the inputs. An input carrying
+`requires_grad` is refused rather than silently given no gradient, because a classical
+network placed in front of the layer would otherwise never train while appearing to.
+
+### 5.0.3 Ground states, one at a time or many
+
+`solve()` takes a Hamiltonian rather than a circuit and runs the variational loop
+server-side, on a neural network quantum state. Read
+`result["ground_state"]["ceiling"]` rather than `result["energy"]`: the variational
+principle puts the true ground state at or below the energy found, and the ceiling adds
+the run's own error bound to give a number the true answer cannot exceed.
+
+**`ansatz="rbm_symm"`** imposes translation symmetry on the network, which is the biggest
+accuracy lever available here. On a six-spin transverse-field Ising ring it reached
+0.0018 above the exact ground state where the default network reached 0.0067, using a
+sixth of the parameters. It is **refused unless your Hamiltonian actually has that
+symmetry**, checked rather than assumed: a symmetric network cannot represent the ground
+state of a Hamiltonian that breaks the symmetry, so it would converge above the true
+energy and report a ceiling that is honest and useless.
+
+**`run_solve_batch()` runs many Hamiltonians on ONE machine**, which matters on a TPU:
+roughly 522 seconds of every job is the machine being created and deleted, against about
+113 seconds of work. A phase diagram sent one Hamiltonian at a time spends four fifths of
+its money on provisioning; sent together, that is paid once.
+
+```python
+problems = [{"qubits": 8, "hamiltonian": h(j)} for j in couplings]
+est = client.estimate_solve_batch(problems, engine="neural.tpu")   # free
+job = client.run_solve_batch(problems, engine="neural.tpu")
+```
+
+Price it first. The total is neither one point's price nor N of them: provisioning does
+not multiply and the per-circuit minimum does, so `estimate_solve_batch` returns the
+per-point breakdown as well as the total. Each point is independent, a point that fails
+is reported in place with its reason, and anything that produced no result is refunded.
+A point's own settings override the batch's, so a sweep over the ansatz is one
+submission.
+
+### 5.0.4 State reconstruction
+
+`run_tomography()` fits a state to measurement records from a device.
+
+```python
+job = client.run_tomography(n_spins, bases, outcomes)
+job["result"]["agreement"]["agreed"]        # of how many were checked
+```
+
+`bases[i]` is the basis shot `i` was measured in, one character per qubit over X, Y and
+Z; `outcomes[i]` is what came back, as `+1` and `-1` rather than 0 and 1.
+
+A reconstruction is **not eligible for ZKSF certification and does not carry a fidelity
+bound**. It carries measured agreement instead: the reconstruction reproduces the measured
+expectations to within a stated interval at a stated confidence, scored on records the fit
+never saw and reported under `agreement`.
+
+The submission is **refused when your bases cannot determine a state**. An
+under-determined fit converges perfectly well onto the wrong state and nothing downstream
+can tell: measured on a Bell state at identical settings, five bases gave fidelity 0.51
+and all nine gave 0.98.
 
 ### 5.1 Cost control
 
@@ -389,6 +480,14 @@ Two protocols are defined. Both are described in full, with worked figures, in
 
 ZCC-v0.1 covers `exact.cpu`, `exact.gpu`, `clifford`, `mps.quimb.cpu`, `mps.aer.cpu`,
 and `pauli.cpu`. It does **not** cover `noisy.cpu`, for the reason given in section 8.
+
+A `run_tomography()` result is **not eligible for either protocol**: the reconstruction
+does not carry a fidelity bound, so requesting a certificate returns 409. Its measured
+agreement with held-out records is reported on the job instead, under `agreement`.
+
+A batched solve has one bound per point rather than one for the batch, because each point
+is an independent search. Name the point to certify with `?index=N`, exactly as for a
+circuit batch.
 
 Every job may be exported as a signed certificate carrying a stable identifier. The
 certificate is retrievable without authentication, so a reader who was not party to
