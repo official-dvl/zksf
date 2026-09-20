@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.1]
+
+### Changed
+- **`docs/CERTIFICATION.md` documents ZQEC-v0.1.** 0.11.0 shipped the methods
+  and announced the protocol in this changelog while the specification beside
+  them still described two protocols and titled itself after them. The new
+  section 4 covers what the interval asserts and why it is Wilson's, the three
+  assumptions recorded on every certificate (the noise model, the decoder, and
+  memory rather than computation), why colour and qLDPC codes are refused
+  rather than decoded, why the subject hash excludes the shot count, and a
+  worked example transcribed from a live certificate rather than composed.
+  Sections 4 through 7 renumbered to 5 through 8, and the two internal
+  cross-references that moved with them corrected.
+- A ninth entry in the limitations section: a logical error rate is a property
+  of a code AND its decoder under a stated noise model, so it does not transfer
+  to hardware whose errors are correlated, leaky or drifting, and it bounds
+  memory rather than computation.
+- `CITATION.cff` describes three certification protocols rather than two, and
+  gains quantum error correction, surface code and logical qubits as keywords.
+
+### Notes
+- No code changes. The Python surface is identical to 0.11.0.
+
 ## [0.11.0]
 
 ### Added
