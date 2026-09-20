@@ -604,6 +604,194 @@ class Client:
         job_id = self.submit_solve(hamiltonian, qubits, **kwargs)
         return self._wait(job_id, poll_seconds, timeout)
 
+    def _qec_body(
+        self,
+        code: str,
+        distance: int,
+        rounds: int | None,
+        shots: int,
+        physical_error: float,
+        measurement_error: float | None,
+        seed: int | None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "code": code,
+            "distance": distance,
+            "shots": shots,
+            "physical_error": physical_error,
+        }
+        if rounds is not None:
+            body["rounds"] = rounds
+        if measurement_error is not None:
+            body["measurement_error"] = measurement_error
+        if seed is not None:
+            body["seed"] = seed
+        return body
+
+    def estimate_qec(
+        self,
+        code: str = "surface",
+        distance: int = 3,
+        *,
+        rounds: int | None = None,
+        shots: int = 10_000,
+        physical_error: float = 1e-3,
+        measurement_error: float | None = None,
+        seed: int | None = None,
+    ) -> dict[str, Any]:
+        """What a memory experiment would cost, before submitting it. Free.
+
+        Worth calling: the same endpoint spans a run that finishes in under a
+        second and one that holds a worker for a quarter of an hour, and the
+        difference is distance times rounds times shots rather than any one
+        of them.
+        """
+        resp = self._http.post(
+            "/qec/estimate",
+            json=self._qec_body(code, distance, rounds, shots, physical_error,
+                                measurement_error, seed),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def submit_qec(
+        self,
+        code: str = "surface",
+        distance: int = 3,
+        *,
+        rounds: int | None = None,
+        shots: int = 10_000,
+        physical_error: float = 1e-3,
+        measurement_error: float | None = None,
+        seed: int | None = None,
+    ) -> str:
+        """Hold a logical qubit in a code and measure how often it fails.
+
+        `rounds` defaults to `distance`, which is the convention these numbers
+        are published at: fewer rounds flatters the code, because time-like
+        errors have had less opportunity to accumulate.
+        """
+        resp = self._http.post(
+            "/qec",
+            json=self._qec_body(code, distance, rounds, shots, physical_error,
+                                measurement_error, seed),
+        )
+        # Through _job_id like every other submit_*, so a submission-time
+        # refusal arrives as its reason rather than as a 404 on the next poll.
+        return _job_id(resp)
+
+    def qec(
+        self,
+        code: str = "surface",
+        distance: int = 3,
+        *,
+        poll_seconds: float = 0.5,
+        timeout: float = 1800.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Run a memory experiment and wait for the logical error rate.
+
+            job = client.qec("surface", distance=5, shots=100_000)
+            lo, hi = job["result"]["confidence_interval_95"]
+
+        READ THE INTERVAL, NOT THE RATE. `logical_error_rate` is a proportion
+        from a finite number of shots. At a hundred thousand shots with no
+        failures it is 0.0, and the honest statement is not that the code never
+        fails, it is that its failure rate is below `hi`. That is the number to
+        quote and the number the certificate carries.
+        """
+        job_id = self.submit_qec(code, distance, **kwargs)
+        return self._wait(job_id, poll_seconds, timeout)
+
+    def _scaling_body(
+        self,
+        code: str,
+        distances: Sequence[int],
+        shots: int,
+        physical_error: float,
+        target: float | None,
+        seed: int | None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "code": code,
+            "distances": list(distances),
+            "shots": shots,
+            "physical_error": physical_error,
+        }
+        if target is not None:
+            body["target_logical_error_rate"] = target
+        if seed is not None:
+            body["seed"] = seed
+        return body
+
+    def estimate_qec_scaling(
+        self,
+        code: str = "surface",
+        distances: Sequence[int] = (3, 5, 7),
+        *,
+        shots: int = 50_000,
+        physical_error: float = 1e-3,
+        target_logical_error_rate: float | None = None,
+        seed: int | None = None,
+    ) -> dict[str, Any]:
+        """What measuring the suppression factor would cost. Free."""
+        resp = self._http.post(
+            "/qec/scaling/estimate",
+            json=self._scaling_body(
+                code, distances, shots, physical_error, target_logical_error_rate, seed
+            ),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def submit_qec_scaling(
+        self,
+        code: str = "surface",
+        distances: Sequence[int] = (3, 5, 7),
+        *,
+        shots: int = 50_000,
+        physical_error: float = 1e-3,
+        target_logical_error_rate: float | None = None,
+        seed: int | None = None,
+    ) -> str:
+        """Measure whether distance helps at this error rate, and what it costs."""
+        resp = self._http.post(
+            "/qec/scaling",
+            json=self._scaling_body(
+                code, distances, shots, physical_error, target_logical_error_rate, seed
+            ),
+        )
+        return _job_id(resp)
+
+    def qec_scaling(
+        self,
+        code: str = "surface",
+        distances: Sequence[int] = (3, 5, 7),
+        *,
+        poll_seconds: float = 0.5,
+        timeout: float = 3600.0,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Measure the suppression factor, and optionally the qubit count.
+
+            job = client.qec_scaling(target_logical_error_rate=1e-9,
+                                     physical_error=1e-3)
+            res = job["result"]
+            res["suppression"]["lambda"]   # 2.1, measured on three runs
+            res["physical_qubits"]         # what one logical qubit costs
+            res["basis"]                   # measured, or extrapolated from what
+
+        THE TWO QUESTIONS A BUYER ACTUALLY HAS, out of one set of runs. Does
+        distance help on my device, and how many physical qubits is a logical
+        one at my error rate. Read `basis`: the suppression factor is measured,
+        the distance that follows from it is arithmetic, and a target below
+        anything these runs could observe is reached by extrapolation. At or
+        above threshold the answer is that there is no such number, which is a
+        result rather than a failure.
+        """
+        job_id = self.submit_qec_scaling(code, distances, **kwargs)
+        return self._wait(job_id, poll_seconds, timeout)
+
     def submit_tomography(
         self,
         n_spins: int,
