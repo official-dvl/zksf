@@ -6,6 +6,80 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0]
+
+### Added
+- **Quantum error correction.** `qec()`, `submit_qec()` and `estimate_qec()`
+  hold a logical qubit in a code for a number of rounds under circuit-level
+  noise and count how often it comes back wrong.
+
+  ```python
+  job = client.qec("surface", distance=5, shots=100_000, physical_error=1e-3)
+  job["result"]["confidence_interval_95"]   # [0.0, 3.69e-05]
+  ```
+
+  **Read the interval, not the rate.** A logical error rate is a proportion
+  measured from a finite number of shots, so at a hundred thousand shots with
+  no failures it reads 0. The statement that can be made is that the rate is
+  below the top of the interval, and that is what the certificate carries. The
+  interval is Wilson's, which stays correct at zero where the textbook one
+  collapses to [0, 0] and claims a perfect code from a finite experiment.
+
+  Codes are `surface`, `surface_x`, `surface_unrotated` and `repetition`,
+  decoded by minimum-weight perfect matching. Colour and qLDPC codes are
+  refused rather than decoded that way: matching is the wrong decoder for them
+  and a wrong decoder returns a number indistinguishable from a right one.
+
+  The circuits come from `stim.Circuit.generated`, the reference generators the
+  field checks against, rather than being written here. A hand-rolled syndrome
+  extraction circuit that is subtly wrong still runs, still decodes and still
+  produces a confident number.
+
+- **`qec_scaling()`, `submit_qec_scaling()` and `estimate_qec_scaling()`: how
+  many physical qubits is one logical qubit at YOUR error rate.** Every roadmap
+  in this industry is quoted in logical qubits and almost nobody will answer
+  that for a specific device.
+
+  ```python
+  job = client.qec_scaling(physical_error=1e-3, target_logical_error_rate=1e-9)
+  res = job["result"]
+  res["suppression"]["lambda"]   # measured across distances 3, 5 and 7
+  res["distance"], res["physical_qubits"]
+  res["basis"]                   # which half is measured, which extrapolated
+  ```
+
+  **Read `basis`.** The suppression factor is measured from real runs, the
+  distance that follows from it is arithmetic, and a target below anything
+  those runs could observe is reached by extrapolating along the measured
+  slope. Saying which is which is the difference between this and a figure
+  copied from a roadmap.
+
+  A distance that produced no failures is excluded from the fit rather than
+  replaced by its confidence bound, because substituting a bound for a missing
+  measurement turns a measurement into an assumption without saying so. One
+  usable point is refused outright: a slope needs two.
+
+  **At or above threshold the answer is that there is no such number** until
+  the physical error rate comes down. That is a result, not a failure.
+
+- **ZQEC-v0.1**, a third certificate protocol beside ZCC-v0.1 and ZHF-v0.1,
+  carrying the logical error rate with its interval, the code, the distance,
+  the rounds, the noise model and the decoder. Its subject hash covers the code
+  and the noise model and deliberately not the shot count, so the same
+  experiment run again at more shots hashes the same.
+
+### Notes
+- Memory only: prepare, hold for some rounds, read out. Logical gates, lattice
+  surgery and magic state distillation are not here.
+- The noise is circuit-level depolarizing, which is the model these rates are
+  published against. It is not a model of any particular vendor's device.
+- Physical qubit counts are the qubits a circuit operates on, which is not
+  `stim.Circuit.generated(...).num_qubits`: that is the largest index plus one,
+  and a rotated surface code leaves grid slots empty. A rotated code of
+  distance d uses 2d^2-1 and an unrotated one (2d-1)^2, so neither formula
+  covers both and neither is hard-coded; the count is derived from the
+  circuits.
+
 ## [0.10.0]
 
 ### Added

@@ -375,6 +375,46 @@ under-determined fit converges perfectly well onto the wrong state and nothing d
 can tell: measured on a Bell state at identical settings, five bases gave fidelity 0.51
 and all nine gave 0.98.
 
+### 5.0.5 Error correction
+
+`qec()` holds a logical qubit in a code under circuit-level noise and counts how often
+it comes back wrong.
+
+```python
+client.estimate_qec("surface", distance=5, shots=100_000)          # free
+job = client.qec("surface", distance=5, shots=100_000, physical_error=1e-3)
+job["result"]["confidence_interval_95"]      # [0.0, 3.69e-05]
+```
+
+**Read the interval, not the rate.** A logical error rate is a proportion measured from
+a finite number of shots, so at a hundred thousand shots with no failures it reads 0.
+The statement that can be made is that the rate is below the top of the interval, and
+that is the number the certificate carries.
+
+`qec_scaling()` answers the question every roadmap is quoted in and almost nobody will
+answer for a specific device: **how many physical qubits is one logical qubit at your
+error rate.**
+
+```python
+job = client.qec_scaling(physical_error=1e-3, target_logical_error_rate=1e-9)
+res = job["result"]
+res["suppression"]["lambda"]      # measured across distances 3, 5 and 7
+res["physical_qubits"]            # what one logical qubit costs
+res["basis"]                      # measured, or extrapolated from what
+```
+
+**Read `basis`.** The suppression factor is measured from real runs, the distance that
+follows from it is arithmetic, and a target below anything those runs could observe is
+reached by extrapolating along the measured slope. At or above threshold the answer is
+that no number of physical qubits reaches the target until the error rate comes down,
+which is a result rather than a failure.
+
+Codes are `surface`, `surface_x`, `surface_unrotated` and `repetition`, decoded by
+minimum-weight perfect matching. Colour and qLDPC codes are refused rather than decoded
+that way: matching is the wrong decoder for them, and a wrong decoder returns a number
+indistinguishable from a right one. This measures **memory only**: prepare, hold, read
+out. Logical gates and lattice surgery are not offered.
+
 ### 5.1 Cost control
 
 `estimate()` is free, instant, and returns the engine that would be selected, the
