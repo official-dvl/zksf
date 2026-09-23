@@ -1,0 +1,156 @@
+{
+ "qgan": {
+  "criterion": "discriminator gap shrinks AND generated distribution moves toward the target",
+  "tvd_before": 0.269140625,
+  "tvd_after": 0.146484375,
+  "discriminator_gap_first": 0.0069473981857299805,
+  "discriminator_gap_last": -0.0005925297737121582,
+  "distribution": {
+   "00": 0.408203125,
+   "01": 0.23828125,
+   "10": 0.0,
+   "11": 0.353515625
+  },
+  "passed": true,
+  "circuits": 722,
+  "quoted_usd": 0.0722,
+  "seconds": 105.7
+ },
+ "rl_policy": {
+  "criterion": "average return beats a random policy",
+  "random_policy": 0.5333333333333333,
+  "first_batches": 0.4444444576899211,
+  "last_batches": 0.6111111144224802,
+  "passed": true,
+  "circuits": 540,
+  "quoted_usd": 0.054,
+  "seconds": 59.4
+ },
+ "reservoir_local": {
+  "criterion": "the standard readout, for comparison against the naive one",
+  "readout": "<Z_i> and <Z_i Z_j>, 10 features",
+  "local_observables": 0.8166666666666667,
+  "raw_features": 0.85,
+  "n_features": 10,
+  "passed": true,
+  "circuits": 200,
+  "quoted_usd": 0.02
+ },
+ "reservoir": {
+  "criterion": "readout on quantum features beats chance (0.5)",
+  "readout": "full bitstring distribution, 16 features",
+  "quantum_features": 0.7833333333333333,
+  "raw_features": 0.85,
+  "passed": true,
+  "circuits": 200,
+  "quoted_usd": 0.02,
+  "seconds": 89.2
+ },
+ "qcbm": {
+  "criterion": "TVD to the target below 0.10",
+  "tvd_before": 0.458984375,
+  "tvd_after": 0.01171875,
+  "distribution": {
+   "00": 0.49609375,
+   "01": 0.005859375,
+   "10": 0.005859375,
+   "11": 0.4921875
+  },
+  "passed": true,
+  "circuits": 806,
+  "quoted_usd": 0.0806,
+  "seconds": 149.8
+ },
+ "patch_gan": {
+  "criterion": "an image, and closer to the target than the untrained start",
+  "tvd_before": 0.8279854655265808,
+  "tvd_after": 0.2311663031578064,
+  "passed": true,
+  "image": [
+   [
+    0.00146484375,
+    0.00146484375,
+    0.0048828125,
+    0.05322265625,
+    0.08349609375,
+    0.00048828125,
+    0.0029296875,
+    0.00048828125
+   ],
+   [
+    0.00390625,
+    0.0009765625,
+    0.00244140625,
+    0.03662109375,
+    0.05615234375,
+    0.0009765625,
+    0.00048828125,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.00048828125,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.02880859375,
+    0.0205078125,
+    0.037109375,
+    0.03076171875,
+    0.04150390625,
+    0.03271484375,
+    0.02734375,
+    0.03076171875
+   ],
+   [
+    0.02587890625,
+    0.03076171875,
+    0.044921875,
+    0.02880859375,
+    0.0263671875,
+    0.033203125,
+    0.02978515625,
+    0.02880859375
+   ],
+   [
+    0.0,
+    0.0,
+    0.00048828125,
+    0.00048828125,
+    0.00048828125,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0009765625,
+    0.00146484375,
+    0.0029296875,
+    0.0732421875,
+    0.0556640625,
+    0.00244140625,
+    0.0,
+    0.00048828125
+   ],
+   [
+    0.0009765625,
+    0.0009765625,
+    0.0009765625,
+    0.06640625,
+    0.041015625,
+    0.00146484375,
+    0.00048828125,
+    0.00048828125
+   ]
+  ],
+  "ascii": "   +@   \n   -*   \n        \n-:=-=-:-\n:-=-:---\n        \n   #*   \n   #=   ",
+  "circuits": 3224,
+  "quoted_usd": 0.3224,
+  "seconds": 583.3
+ }
+}
