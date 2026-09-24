@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.2]
+
+### Added
+- **Dynamic circuits.** A Qiskit circuit with mid-circuit control flow
+  (`if_test`, `while_loop`, `for_loop`, `switch` on measured bits) has no
+  OpenQASM 2.0 form, so the SDK now sends it as OpenQASM 3. The service runs it
+  on `exact.cpu`, `noisy.cpu` and `mps.aer.cpu`. Circuits without control flow
+  are sent as 2.0 exactly as before.
+- **`Client.estimate_tomography()`.** A free quote for a state reconstruction,
+  taking exactly what `submit_tomography()` takes and priced by the service the
+  way it will charge: metered on runtime, with the per-job floor. The console
+  could already quote a reconstruction and the SDK could not, so a script had
+  no way to learn the price before submitting. `submit_tomography()` now builds
+  its request with the same helper, so the quote and the charge cannot drift.
+
 ## [0.11.1]
 
 ### Changed

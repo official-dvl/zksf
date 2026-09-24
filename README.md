@@ -358,6 +358,7 @@ submission.
 `run_tomography()` fits a state to measurement records from a device.
 
 ```python
+client.estimate_tomography(n_spins, bases, outcomes)   # free, same body as the run
 job = client.run_tomography(n_spins, bases, outcomes)
 job["result"]["agreement"]["agreed"]        # of how many were checked
 ```
