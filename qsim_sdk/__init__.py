@@ -225,7 +225,15 @@ def _to_qasm2(circuit: Any) -> str:
     optional dependency: pip install qsim-sdk[multiframework]).
     """
     if isinstance(circuit, QuantumCircuit):
-        return qasm2.dumps(circuit)
+        try:
+            return qasm2.dumps(circuit)
+        except Exception:
+            # A dynamic circuit (if/while on measured bits) has no OpenQASM 2.0
+            # form. The service takes OpenQASM 3 in the same field and runs it
+            # on the Aer engines (exact.cpu, noisy.cpu, mps.aer.cpu).
+            from qiskit import qasm3
+
+            return qasm3.dumps(circuit)
     try:
         import qbraid
     except ImportError as exc:  # pragma: no cover - depends on optional extra
@@ -792,6 +800,51 @@ class Client:
         job_id = self.submit_qec_scaling(code, distances, **kwargs)
         return self._wait(job_id, poll_seconds, timeout)
 
+    def _tomography_body(
+        self,
+        n_spins: int,
+        bases: Sequence[str],
+        outcomes: Sequence[Sequence[int]],
+        engine: str | None,
+        max_seconds: float | None,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "n_spins": int(n_spins),
+            "bases": [str(b).upper() for b in bases],
+            "outcomes": [[int(v) for v in shot] for shot in outcomes],
+            "engine": engine,
+            "max_seconds": max_seconds,
+            "params": params,
+        }
+
+    def estimate_tomography(
+        self,
+        n_spins: int,
+        bases: Sequence[str],
+        outcomes: Sequence[Sequence[int]],
+        *,
+        engine: str | None = None,
+        max_seconds: float | None = None,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """What a reconstruction would cost, before submitting it. Free.
+
+        Takes exactly what `submit_tomography` takes and prices it the way the
+        service will charge it, so the quote and the charge cannot drift apart:
+        metered on runtime, with the per-job floor.
+
+            est = client.estimate_tomography(2, bases, outcomes)
+            est["predicted_cost_usd"], est["predicted_seconds"]
+        """
+        resp = self._http.post(
+            "/tomography/estimate",
+            json=self._tomography_body(n_spins, bases, outcomes, engine,
+                                       max_seconds, params),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def submit_tomography(
         self,
         n_spins: int,
@@ -827,14 +880,8 @@ class Client:
         """
         resp = self._http.post(
             "/tomography",
-            json={
-                "n_spins": int(n_spins),
-                "bases": [str(b).upper() for b in bases],
-                "outcomes": [[int(v) for v in shot] for shot in outcomes],
-                "engine": engine,
-                "max_seconds": max_seconds,
-                "params": params,
-            },
+            json=self._tomography_body(n_spins, bases, outcomes, engine,
+                                       max_seconds, params),
         )
         return _job_id(resp)
 
