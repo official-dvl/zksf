@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0]
+
+### Changed
+- Released as a minor version: 0.11.2 added a capability (dynamic circuits sent as
+  OpenQASM 3) and a method (`estimate_tomography`). Same code as 0.11.2;
+  `CITATION.cff` now carries the released version.
+
 ## [0.11.2]
 
 ### Added
