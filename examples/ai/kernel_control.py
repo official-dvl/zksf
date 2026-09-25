@@ -1,74 +1,70 @@
-"""Free local control for the production kernel run.
+"""The quantum kernel computed exactly, locally, for free.
 
-The production run scored 0.475 against an RBF kernel's 0.85. Below chance on a
-balanced binary problem is not a result, it is a symptom, and there are three
-candidate causes that the production number alone cannot tell apart:
+The control for quantum_kernel.py. It builds the same ZZ feature map on the same
+data (two_moons.py), takes each kernel entry from the statevector instead of
+from shots, and trains the same SVM, so it:
 
-  1. the feature map genuinely does not separate this data,
-  2. shot noise made the 22x22 kernel matrix non-PSD and broke the SVM,
-  3. the circuit I wrote does not compute the kernel I think it does.
+  1. reproduces the published kernel accuracies to the digit, since nothing in
+     it is random once the seed has fixed the data;
+  2. checks the circuit computes the kernel it claims to: K(x, x) must be
+     exactly 1 for any valid overlap kernel, because U(x)^dagger U(x) is the
+     identity;
+  3. shows how much the result depends on the input scaling, a constant that
+     carries no information about the problem: the published runs scale the
+     features into [0, pi], and the sweep below tries narrower ranges and a
+     depth-1 map.
 
-This computes the SAME kernel exactly, by statevector, with no shots and no
-submissions, so it costs nothing and isolates all three. If exact also scores
-0.475 then cause 1 or 3; if exact scores well then cause 2 and the production
-number is an artefact of my own measurement rather than a property of the
-method.
-
-The unit-diagonal check settles cause 3 on its own: K(x, x) must be exactly 1
-for any valid overlap kernel, because U(x)^dagger U(x) is the identity.
+    python kernel_control.py
 """
 from __future__ import annotations
 
 import numpy as np
-from qiskit import QuantumCircuit
-from qiskit.circuit import ParameterVector
 from qiskit.quantum_info import Statevector
-from sklearn.datasets import make_moons
 from sklearn.svm import SVC
 
-N_TRAIN, N_TEST, SEED = 22, 40, 1
-x = ParameterVector("x", 2)
+from two_moons import split, to_angles
 
 
-def feature_map(params, depth: int = 2) -> QuantumCircuit:
+def feature_map_state(a, depth: int) -> np.ndarray:
+    """The ZZ feature map of quantum_kernel.py, as a statevector."""
+    from qiskit import QuantumCircuit
     qc = QuantumCircuit(2)
     for _ in range(depth):
         qc.h(0)
         qc.h(1)
-        qc.rz(2.0 * params[0], 0)
-        qc.rz(2.0 * params[1], 1)
+        qc.rz(2.0 * a[0], 0)
+        qc.rz(2.0 * a[1], 1)
         qc.cx(0, 1)
-        qc.rz(2.0 * (np.pi - params[0]) * (np.pi - params[1]), 1)
+        qc.rz(2.0 * (np.pi - a[0]) * (np.pi - a[1]), 1)
         qc.cx(0, 1)
-    return qc
+    return Statevector(qc).data
 
 
-def state(a, depth: int) -> np.ndarray:
-    fm = feature_map(x, depth)
-    return Statevector(fm.assign_parameters({x[0]: a[0], x[1]: a[1]})).data
-
-
-def run(depth: int, scale: float) -> None:
-    X, y = make_moons(n_samples=N_TRAIN + N_TEST, noise=0.2, random_state=SEED)
-    X = X * scale
-    Xtr, ytr, Xte, yte = X[:N_TRAIN], y[:N_TRAIN], X[N_TRAIN:], y[N_TRAIN:]
-
-    Str = np.array([state(a, depth) for a in Xtr])
-    Ste = np.array([state(a, depth) for a in Xte])
-    Ktr = np.abs(Str.conj() @ Str.T) ** 2          # exact, no shots
+def exact_kernel_accuracy(seed: int, depth: int = 2, top: float = np.pi):
+    xtr, ytr, xte, yte, _ = split(seed)
+    Xtr, Xte = (a * (top / np.pi) for a in to_angles(xtr, xte))
+    Str = np.array([feature_map_state(a, depth) for a in Xtr])
+    Ste = np.array([feature_map_state(a, depth) for a in Xte])
+    Ktr = np.abs(Str.conj() @ Str.T) ** 2
     Kte = np.abs(Ste.conj() @ Str.T) ** 2
-
     diag = float(np.abs(np.diag(Ktr) - 1.0).max())
-    off = Ktr[np.triu_indices(N_TRAIN, 1)]
-    q = float(SVC(kernel="precomputed").fit(Ktr, ytr).score(Kte, yte))
-    rbf = float(SVC(kernel="rbf").fit(Xtr, ytr).score(Xte, yte))
-
-    print(f"depth={depth} scale={scale:.3f}  exact QSVM {q:.3f}   RBF {rbf:.3f}   "
-          f"|K_ii - 1| max {diag:.2e}   off-diag mean {off.mean():.3f} "
-          f"sd {off.std():.3f}")
+    acc = float(SVC(kernel="precomputed").fit(Ktr, ytr).score(Kte, yte))
+    rbf = float(SVC(kernel="rbf").fit(xtr, ytr).score(xte, yte))
+    return acc, rbf, diag
 
 
-print("Is the circuit right? K_ii must be exactly 1.\n")
-for depth in (1, 2):
-    for scale in (np.pi / 2, 1.0, 0.5, 0.25):
-        run(depth, scale)
+def main() -> None:
+    print("The published setting: depth 2, features scaled into [0, pi].")
+    for seed in (1, 2, 3):
+        acc, rbf, diag = exact_kernel_accuracy(seed)
+        print(f"  seed {seed}: exact quantum kernel {acc:.3f}   RBF {rbf:.3f}   |K_ii - 1| max {diag:.1e}")
+
+    print("\nThe same data, seed 1, other scalings and depths:")
+    for depth in (1, 2):
+        for name, top in (("pi", np.pi), ("pi/2", np.pi / 2), ("1", 1.0), ("1/2", 0.5)):
+            acc, _, _ = exact_kernel_accuracy(1, depth, top)
+            print(f"  depth {depth}, features in [0, {name:>4}]: {acc:.3f}")
+
+
+if __name__ == "__main__":
+    main()

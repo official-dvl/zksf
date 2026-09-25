@@ -24,8 +24,12 @@ The scripts submit real jobs to your account. Price anything first with
 | QGAN, gate circuit | `python ai_proofs.py qgan` | 722 | $0.0722 | TVD 0.269 to 0.146 |
 | Quantum RL policy | `python ai_proofs.py rl_policy` | 540 | $0.0540 | 0.611 against 0.533 random |
 | Patch GAN image generation | `python ai_proofs.py patch_gan` | 3,224 | $0.3224 | the 8x8 cross |
-| Quantum kernel SVM, seed 1, 2 or 3 | `python quantum_kernel.py 1` | 1,111 | $0.1111 | 0.475 / 0.700 / 0.700 |
-| Quantum kernel, exact, no shots | `python kernel_control.py` | none | free | 0.475 |
+| Variational classifier, seed 1, 2 or 3, exact | `python variational_classifier.py 1` | 4,000 | $0.4000 | 0.925 / 0.850 / 0.700 |
+| Variational classifier, 1,024 shots | `python variational_classifier.py 1 --shots 1024` | 4,000 | $0.4000 | 0.925 / 0.825 / 0.700 |
+| Variational classifier, exact, on your machine | `python variational_classifier.py 1 --local` | none | free | 0.925 / 0.850 / 0.700 |
+| Quantum kernel SVM, seed 1, 2 or 3 | `python quantum_kernel.py 1` | 1,111 | $0.1111 | 0.675 / 0.750 / 0.750 |
+| Quantum kernel, exact | `python quantum_kernel.py 1 --exact` | 1,111 | $0.1111 | 0.675 / 0.750 / 0.750 |
+| Quantum kernel, exact, on your machine, plus the scaling sweep | `python kernel_control.py` | none | free | 0.675 / 0.750 / 0.750 |
 | Photonic QGAN, five seeded starts | `python photonic_qgan.py` | see script | $0.1096 | see below |
 | Photonic QGAN on Quandela Belenos | `python photonic_belenos.py` | 2 runs | $0.4584 a run | P(target) 0.974 |
 
@@ -43,8 +47,17 @@ charged the $0.0001 floor.
 - **The photonic QGAN is seeded per start.** `torch.manual_seed(0)` to `(4)` fix
   each start's initial angles. Seeds 0 to 4 gave P(target) 0.875, 1.000, 0.989,
   0.932 and 0.766 (`photonic_qgan_results.json`).
-- **The kernel's seed is the dataset's.** `make_moons(n_samples=62, noise=0.2,
-  random_state=seed)`: the first 22 points train, the last 40 test, scaled by pi/2.
+- **The classifier and the kernel share one seeded dataset** (`two_moons.py`).
+  `default_rng(seed)` draws 22 training points, then 40 test points, then the
+  classifier's four starting angles; features are scaled into [0, pi] on the
+  training range. The classical baselines are seeded from `default_rng(seed)` too.
+- **Exact mode reproduces to the digit.** `variational_classifier.py` without
+  `--shots`, and `quantum_kernel.py --exact`, send an observable, so `exact.cpu`
+  computes each value from the statevector instead of sampling it. Nothing random
+  is left, and `--local` / `kernel_control.py` do the same arithmetic on your
+  machine. The shot-based figures (classifier at 1,024 shots, kernel at 2,048)
+  re-run to within shot noise; on the kernel the sampled and exact accuracies
+  were equal on all three seeds.
 
 ## The hardware rows
 
