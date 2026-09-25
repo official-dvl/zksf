@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0]
+
+### Added
+- **`Client.estimate_photonic()`, `Client.estimate_sequence()` and
+  `Client.estimate_mis()`.** Free quotes for linear-optics circuits, Pulser
+  sequences and maximum independent set, taking exactly what the matching
+  `submit_*` takes. The SDK could submit all three and price none of them.
+- **`ConnectionLost`**, raised when the connection keeps dropping while waiting
+  for a job. It carries `job_id`, and its message says how to read the job again.
+
+### Fixed
+- **A dropped connection while waiting no longer loses the job.** `run()`,
+  `run_batch()` and every other call that waits now read the job again after a
+  reset, protocol error, timeout or 5xx, with a backoff, instead of raising the
+  transport error. A read failing is not the job failing. Previously the error
+  carried no job id, so a job that went on to finish could not be found.
+- `JobRejected` and `JobFailed` raised while waiting now carry `job_id`.
+
 ## [0.12.0]
 
 ### Changed

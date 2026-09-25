@@ -131,6 +131,8 @@ Further examples are in [`examples/`](https://github.com/official-dvl/zksf/tree/
 |---|---|---|
 | `estimate(circuit, shots, engine=None)` | Predicted engine, runtime, and price for ONE circuit, or the reason it is infeasible | Free |
 | `estimate_batch(circuits, shots, engine=None)` | The same for a whole sweep: total, per point, and how many batches it takes | Free |
+| `estimate_photonic(circuit, input_state, shots, engine)` / `estimate_sequence(sequence, shots, engine)` | The same for a linear-optics circuit or a Pulser sequence | Free |
+| `estimate_mis(vertices, ...)` | The same for a maximum independent set, taking what `submit_mis` takes | Free |
 | `submit(circuit, shots, engine=None, ...)` | Enqueue a job, returns a job id | Billed on completion |
 | `job(job_id)` | Poll a job record | Free |
 | `run(circuit, shots, engine=None, ...)` | `submit` followed by polling until terminal state | Billed on completion |
@@ -178,8 +180,8 @@ print(job["result"]["counts"])      # a bit reads 1 when that atom ended in Rydb
 ```
 
 Pulser is not a dependency of this package. If you do not have it installed, pass the
-sequence's abstract representation as a JSON string instead. `estimate()` takes gate
-circuits only, so there is no SDK price check for a sequence yet.
+sequence's abstract representation as a JSON string instead. `estimate_sequence(seq, shots)`
+prices it first, free, with the same arguments `run_sequence` takes.
 
 The same sequence runs on real neutral-atom hardware by naming a different engine.
 `analog.pulser.cpu` is the exact local reference, capped at 14 atoms; the two processors
@@ -228,8 +230,8 @@ The input state accepts an occupation list as above, a `perceval.BasicState`, or
 one already serialised. Perceval is not a dependency of this package, and the list form
 needs it only for the circuit. Pass `engine="qpu.quandela.belenos"` to run on real
 hardware, which accepts photons only on its connected input modes and refuses anything
-else before submission rather than after you have paid. As with sequences there is no
-`estimate()` counterpart yet.
+else before submission rather than after you have paid. `estimate_photonic(circuit,
+input_state, shots)` prices it first, free, with the same arguments `run_photonic` takes.
 
 ### 5.0.2 Parameter sweeps and training loops
 
