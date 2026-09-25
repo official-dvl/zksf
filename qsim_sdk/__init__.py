@@ -54,6 +54,28 @@ class JobFailed(RuntimeError):
     pass
 
 
+class ConnectionLost(RuntimeError):
+    """The connection kept dropping while waiting for a job, past every retry.
+
+    The JOB is unaffected: a failed read is not a failed run. Its id is on
+    ``job_id`` and in the message, so ``client.job(job_id)`` picks it up again.
+    Before 0.13.0 a dropped read raised the transport error itself, with no job
+    id anywhere in it, and a job that went on to finish could not be found.
+    """
+
+    def __init__(self, job_id: str, cause: BaseException):
+        self.job_id = job_id
+        super().__init__(
+            f"lost the connection while waiting for job {job_id} ({type(cause).__name__}); "
+            f"the job itself is unaffected. Read it with client.job({job_id!r})"
+        )
+
+
+#: Reads of one job while waiting on it, before ConnectionLost. With the backoff
+#: below that is about a minute of trying.
+_READ_ATTEMPTS = 6
+
+
 class CancelRefused(RuntimeError):
     """A cancel the service declined, carrying its reason: the job has already
     started on the device, has finished, or runs where cancelling is not offered."""
@@ -66,6 +88,12 @@ def _detail(resp: Any) -> str:
     except ValueError:
         detail = None
     return str(detail) if detail else resp.text
+
+
+def _with_id(exc: Exception, job_id: str) -> Exception:
+    """The job id on a waiting exception, so the handle is never lost with it."""
+    exc.job_id = job_id  # type: ignore[attr-defined]
+    return exc
 
 
 def _job_id(resp: Any) -> str:
@@ -328,6 +356,56 @@ class Client:
         resp = self._http.post(
             "/estimate",
             json={"qasm2": _to_qasm2(circuit), "shots": shots, "engine": engine},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def estimate_photonic(
+        self, circuit: Any, input_state: Any, shots: int = 1024, engine: str = PHOTONIC_ENGINE
+    ) -> dict[str, Any]:
+        """Free quote for `submit_photonic` with the same arguments: engine,
+        predicted runtime and cost. ``n_qubits`` in the answer carries modes."""
+        resp = self._http.post(
+            "/estimate",
+            json={"photonic": _to_photonic(circuit, input_state), "shots": shots, "engine": engine},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def estimate_sequence(
+        self, sequence: Any, shots: int = 1024, engine: str = ANALOG_ENGINE
+    ) -> dict[str, Any]:
+        """Free quote for `submit_sequence` with the same arguments.
+        ``n_qubits`` in the answer carries atoms."""
+        resp = self._http.post(
+            "/estimate",
+            json={"pulser": _to_pulser(sequence), "shots": shots, "engine": engine},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def estimate_mis(
+        self,
+        vertices: Sequence[Sequence[float]],
+        *,
+        weights: Sequence[float] | None = None,
+        shots: int = 100,
+        engine: str | None = None,
+        blockade_um: float = 7.5,
+        duration_ns: int = 4_000,
+    ) -> dict[str, Any]:
+        """Free quote for `submit_mis` with the same arguments: the sequence
+        /mis would build, priced by the function that charges it."""
+        resp = self._http.post(
+            "/mis/estimate",
+            json={
+                "vertices": [list(v) for v in vertices],
+                "weights": list(weights) if weights is not None else None,
+                "shots": shots,
+                "engine": engine,
+                "blockade_um": blockade_um,
+                "duration_ns": duration_ns,
+            },
         )
         resp.raise_for_status()
         return resp.json()
@@ -1141,13 +1219,13 @@ class Client:
         deadline = started + timeout
         warned = False
         while time.monotonic() < deadline:
-            job = self.job(job_id)
+            job = self._read_while_waiting(job_id)
             if job["status"] == "done":
                 return job
             if job["status"] == "rejected":
-                raise JobRejected(job.get("reason"))
+                raise _with_id(JobRejected(job.get("reason")), job_id)
             if job["status"] == "error":
-                raise JobFailed(job.get("error"))
+                raise _with_id(JobFailed(job.get("error")), job_id)
             warned = self._polling(
                 job_id, job["status"], time.monotonic() - started, warned
             )
@@ -1195,19 +1273,42 @@ class Client:
 
     # --------------------------------------------------------------- waiting
 
+    def _read_while_waiting(self, job_id: str) -> dict[str, Any]:
+        """One read of a job being waited on, surviving a dropped connection.
+
+        A reset, a protocol error, a timeout or a 5xx is a failed READ, not a
+        failed job, and the id is already known, so it is simply read again with
+        a backoff. 25 Sep 2026: a 6.4 MB job's poll died on
+        "Server disconnected without sending a response" while the job ran to
+        completion unseen. A 4xx is a real answer and is raised at once.
+        """
+        delay, last = 1.0, None
+        for _ in range(_READ_ATTEMPTS):
+            try:
+                return self.job(job_id)
+            except httpx.TransportError as exc:
+                last = exc
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code < 500:
+                    raise
+                last = exc
+            time.sleep(delay)
+            delay = min(delay * 2, 20.0)
+        raise ConnectionLost(job_id, last)
+
     def _wait(self, job_id: str, poll_seconds: float, timeout: float) -> dict[str, Any]:
         """Poll until the job reaches a terminal state, or raise saying why."""
         started = time.monotonic()
         deadline = started + timeout
         warned = False
         while time.monotonic() < deadline:
-            job = self.job(job_id)
+            job = self._read_while_waiting(job_id)
             if job["status"] == "done":
                 return job
             if job["status"] == "rejected":
-                raise JobRejected(job["reason"])
+                raise _with_id(JobRejected(job["reason"]), job_id)
             if job["status"] == "error":
-                raise JobFailed(job["error"])
+                raise _with_id(JobFailed(job["error"]), job_id)
             warned = self._polling(
                 job_id, job["status"], time.monotonic() - started, warned
             )
