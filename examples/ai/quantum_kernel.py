@@ -104,7 +104,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("seed", type=int, nargs="?", default=1)
     ap.add_argument("--exact", action="store_true", help="exact expectations instead of shots")
+    ap.add_argument("--engine", default=ENGINE,
+                    help="where the circuits run: exact.cpu (default), exact.gpu or exact.tpu")
     args = ap.parse_args()
+    if args.exact and args.engine != "exact.cpu":
+        raise SystemExit("--exact reads an expectation value, which exact.cpu computes; "
+                         f"{args.engine} samples, so run it without --exact")
 
     token = os.environ.get("ZKSF_API_TOKEN")
     if not token:
@@ -119,7 +124,7 @@ def main() -> None:
           f"pairs = {len(circuits)} circuits, {'exact' if args.exact else f'{SHOTS} shots'}")
 
     client = qsim_sdk.Client(token=token)
-    est = client.estimate_batch(circuits, shots=SHOTS, engine=ENGINE)
+    est = client.estimate_batch(circuits, shots=SHOTS, engine=args.engine)
     print(f"  quoted ${est['total_usd']:.4f}")
     before = client.balance()
 
@@ -128,10 +133,15 @@ def main() -> None:
     for start in range(0, len(circuits), CHUNK):
         part = circuits[start:start + CHUNK]
         if args.exact:
-            job = client.run_batch(part, engine=ENGINE, observable=P00, timeout=900.0)
+            job = client.run_batch(part, engine=args.engine, observable=P00, timeout=900.0)
         else:
-            job = client.run_batch(part, shots=SHOTS, engine=ENGINE, timeout=900.0)
+            job = client.run_batch(part, shots=SHOTS, engine=args.engine, timeout=900.0)
         for item in job["results"]:
+            # A failed circuit has no overlap to give. Scoring it as 0 would
+            # quietly change the kernel matrix and the accuracy with it.
+            if item.get("status") != "done":
+                raise SystemExit(f"circuit {start + item['index']} did not finish in job "
+                                 f"{job['id']} ({item.get('status')}): not scoring seed {args.seed}")
             res = item.get("result") or {}
             if args.exact:
                 values.append(float(res["expectation"]))
@@ -150,7 +160,7 @@ def main() -> None:
     rbf = float(SVC(kernel="rbf").fit(xtr, ytr).score(xte, yte))
 
     out = {
-        "seed": args.seed, "engine": ENGINE, "shots": None if args.exact else SHOTS,
+        "seed": args.seed, "engine": args.engine, "shots": None if args.exact else SHOTS,
         "exact": args.exact, "n_train": N_TRAIN, "n_test": N_TEST,
         "circuits": len(circuits), "seconds": round(elapsed, 1),
         "quoted_usd": est["total_usd"],
