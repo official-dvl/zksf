@@ -350,8 +350,8 @@ job = client.run_solve_batch(problems, engine="neural.tpu")
 
 Price it first. The total is neither one point's price nor N of them: provisioning does
 not multiply and the per-circuit minimum does, so `estimate_solve_batch` returns the
-per-point breakdown as well as the total. Each point is independent, a point that fails
-is reported in place with its reason, and anything that produced no result is refunded.
+per-point breakdown as well as the total. Each point is independent, and a point that fails
+is reported in place with its reason. The batch is billed by the second it actually runs.
 A point's own settings override the batch's, so a sweep over the ansatz is one
 submission.
 
@@ -432,7 +432,7 @@ factor of the point count:
 
 ```python
 est = client.estimate_batch(circuits, shots=1024, engine="exact.cpu")
-est["total_usd"]      # what the account will be debited
+est["total_usd"]      # the estimate; billed by the second as it runs
 est["per_point_usd"]  # and where it goes; a sweep is not uniform
 est["batches"]        # how many submissions run_batch will take
 ```
@@ -500,7 +500,7 @@ Selection can be overridden with the `engine` argument.
 | QPU | `qpu.quera.aquila` | Real hardware | QuEra Aquila neutral-atom processor, up to 256 atoms. Takes the same Pulser sequence as `analog.pulser.cpu`, not a gate circuit, so it is named explicitly. Runs only inside QuEra's published execution windows: a submission outside one is accepted and waits. Billed at provider cost |
 | QPU | `qpu.pasqal.fresnel` | Real hardware | Pasqal FRESNEL neutral-atom processor, up to 100 atoms. Also takes a Pulser sequence. Bills **machine time rather than shots**, so a shot is roughly four seconds of QPU wall clock and the usual 1,024-shot default would be an expensive job; shot counts are capped server-side for that reason. Billed at provider cost |
 | CPU | `neural.cpu` | Neural-network wavefunction (variational Monte Carlo) | Ground states rather than circuits: takes a Hamiltonian through `solve()`, up to 40 spins. A circuit sent to it is refused |
-| TPU | `neural.tpu` | The same method on a Google TPU | The same results and bound as `neural.cpu`. Billed by runtime, with start-up included in the quoted price and unused seconds refunded; price it first with `estimate_solve()` |
+| TPU | `neural.tpu` | The same method on a Google TPU | The same results and bound as `neural.cpu`. $0.25 per task for the machine's first 480 seconds, start-up included, then $1.85 per chip-hour by the second; estimate it first with `estimate_solve()` |
 
 Two MPS implementations are maintained deliberately. Agreement between independent
 implementations of the same approximation is evidence that neither carries an
