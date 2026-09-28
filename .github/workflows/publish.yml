@@ -33,7 +33,9 @@ jobs:
         if: github.event_name == 'release'
         run: |
           PKG=$(python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
-          TAG="${GITHUB_REF_NAME#v}"
+          # [vV]: a tag written V0.10.0 rather than v0.10.0 kept its prefix,
+          # so the comparison could never match and the release refused to publish.
+          TAG="${GITHUB_REF_NAME#[vV]}"
           echo "pyproject version: $PKG"
           echo "release tag      : $TAG"
           test "$PKG" = "$TAG" || {
