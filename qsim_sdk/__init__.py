@@ -394,8 +394,9 @@ class Client:
         blockade_um: float = 7.5,
         duration_ns: int = 4_000,
     ) -> dict[str, Any]:
-        """Free quote for `submit_mis` with the same arguments: the sequence
-        /mis would build, priced by the function that charges it."""
+        """Free estimate for `submit_mis` with the same arguments, for the
+        sequence /mis would build. On hardware it is the provider's price; on a
+        simulator the job is billed by the seconds it actually runs."""
         resp = self._http.post(
             "/mis/estimate",
             json={
@@ -423,7 +424,7 @@ class Client:
         """Free pre-run check for a whole sweep, not one circuit.
 
             est = client.estimate_batch(circuits, engine="exact.cpu")
-            est["total_usd"]        # what the account will be debited
+            est["total_usd"]        # the estimate; billed by the second as it runs
             est["per_point_usd"]    # and where it goes
 
         `estimate` prices ONE circuit, and the minimum is charged per circuit,
@@ -636,7 +637,8 @@ class Client:
 
         The optimiser is SPSA, which costs two circuit evaluations per
         iteration whatever the parameter count, plus one final run at the best
-        point: `max_iterations=60` is 121 charged evaluations.
+        point: `max_iterations=60` is 121 evaluations. The search is billed by
+        the seconds it runs.
         """
         resp = self._http.post(
             "/solve",
@@ -884,7 +886,6 @@ class Client:
         bases: Sequence[str],
         outcomes: Sequence[Sequence[int]],
         engine: str | None,
-        max_seconds: float | None,
         params: dict[str, Any],
     ) -> dict[str, Any]:
         return {
@@ -892,7 +893,6 @@ class Client:
             "bases": [str(b).upper() for b in bases],
             "outcomes": [[int(v) for v in shot] for shot in outcomes],
             "engine": engine,
-            "max_seconds": max_seconds,
             "params": params,
         }
 
@@ -908,17 +908,18 @@ class Client:
     ) -> dict[str, Any]:
         """What a reconstruction would cost, before submitting it. Free.
 
-        Takes exactly what `submit_tomography` takes and prices it the way the
-        service will charge it, so the quote and the charge cannot drift apart:
-        metered on runtime, with the per-job floor.
+        Takes exactly what `submit_tomography` takes. It is an estimate: the
+        job is billed by the seconds it actually runs, with the per-circuit
+        minimum.
 
             est = client.estimate_tomography(2, bases, outcomes)
             est["predicted_cost_usd"], est["predicted_seconds"]
+
+        `max_seconds` is accepted and ignored: a job runs until it finishes.
         """
         resp = self._http.post(
             "/tomography/estimate",
-            json=self._tomography_body(n_spins, bases, outcomes, engine,
-                                       max_seconds, params),
+            json=self._tomography_body(n_spins, bases, outcomes, engine, params),
         )
         resp.raise_for_status()
         return resp.json()
@@ -955,11 +956,12 @@ class Client:
         converges perfectly well onto the wrong state and nothing downstream can
         tell: measured on a Bell state, five bases gave fidelity 0.51 and all
         nine gave 0.98 at identical settings.
+
+        `max_seconds` is accepted and ignored: a job runs until it finishes.
         """
         resp = self._http.post(
             "/tomography",
-            json=self._tomography_body(n_spins, bases, outcomes, engine,
-                                       max_seconds, params),
+            json=self._tomography_body(n_spins, bases, outcomes, engine, params),
         )
         return _job_id(resp)
 
@@ -999,9 +1001,9 @@ class Client:
         engine is a choice rather than a rewrite.
 
         Each point is independent. One that fails is reported in place with its
-        reason and the others still return, and a point that never starts
-        before the machine's wall-clock ceiling comes back as `skipped`.
-        Anything that produced no result is refunded.
+        reason and the others still return. The batch is billed by the second
+        it runs, with one TPU task fee for the whole batch. `max_seconds` is
+        accepted and ignored: a job runs until it finishes.
 
         `params` applies to every point and a point's own value wins, so a
         sweep over the ansatz width is one submission:
@@ -1018,7 +1020,6 @@ class Client:
             json={
                 "problems": [dict(p) for p in problems],
                 "engine": engine,
-                "max_seconds": max_seconds,
                 "params": params,
             },
         )
@@ -1035,7 +1036,7 @@ class Client:
         """What a batch of ground-state searches would cost. Free.
 
             est = client.estimate_solve_batch(problems, engine="neural.tpu")
-            est["total_usd"]           # what the account is debited at submit
+            est["total_usd"]           # the estimate; billed by the second as it runs
             est["per_point_usd"]       # and where it goes
             est["predicted_seconds"]   # how long the machine is held
 
@@ -1048,7 +1049,6 @@ class Client:
             json={
                 "problems": [dict(p) for p in problems],
                 "engine": engine,
-                "max_seconds": max_seconds,
                 "params": params,
             },
         )
@@ -1205,7 +1205,7 @@ class Client:
         bindings can exhaust memory while the rest are fine, and an optimizer
         wants those reported as bad points rather than as an exception. Read
         `job["summary"]` for the tally and `job["results"][i]["status"]` for
-        each one. Only the evaluations that returned a result are charged.
+        each one. The batch is billed by the seconds it runs.
         """
         job_id = self.submit_batch(
             circuits, shots=shots, engine=engine, observable=observable, **params
