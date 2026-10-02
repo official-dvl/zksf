@@ -12,9 +12,9 @@ replaces the old figures rather than confirming them. Everything the old one
 lacked is here: the circuit is in this file, every start is seeded, and the
 converged weights are written to photonic_qgan_results.json.
 
-THE SHAPE. Three modes with two photons entering modes 0 and 2, which is the
-input Belenos can actually produce: its single-photon sources sit on alternating
-modes, so the same program runs on hardware unchanged. Three trainable
+THE SHAPE. Three modes with two photons entering modes 0 and 2, the layout
+photonic hardware with single-photon sources on alternating modes takes. Three
+trainable
 beamsplitters span U(3). The target mirrors the gate QGAN on the same page,
 0.4 / 0.1 / 0.1 / 0.4, so the photonic row and the gate rows are scored the same
 way and can sit in one table.

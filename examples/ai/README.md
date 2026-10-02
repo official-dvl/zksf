@@ -31,7 +31,6 @@ The scripts submit real jobs to your account. Price anything first with
 | Quantum kernel, exact | `python quantum_kernel.py 1 --exact` | 1,111 | $0.1111 | 0.675 / 0.750 / 0.750 |
 | Quantum kernel, exact, on your machine, plus the scaling sweep | `python kernel_control.py` | none | free | 0.675 / 0.750 / 0.750 |
 | Photonic QGAN, five seeded starts | `python photonic_qgan.py` | see script | $0.1096 | see below |
-| Photonic QGAN on Quandela Belenos | `python photonic_belenos.py` | 2 runs | $0.4584 a run | P(target) 0.974 |
 
 Costs are what the published runs were charged. Every simulator circuit here is
 charged the $0.0001 floor.
