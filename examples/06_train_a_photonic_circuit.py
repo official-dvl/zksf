@@ -15,12 +15,10 @@ beamsplitter separately. Hong-Ou-Mandel interference says that probability is
 exactly zero at the balanced point, so a correct gradient must walk theta to
 pi/2 and the loss must fall to the shot-noise floor.
 
-Swap `engine=` for "qpu.quandela.belenos" to run the same loop on real photonic
-hardware. Do the arithmetic first: every forward is one job and every backward
-is two jobs per parameter, so 200 steps of a 6-parameter mesh is 2,600 tasks.
-Settle the model in simulation, then spend the hardware budget on the trained
-point. That is not a limitation of this service; it is why the manufacturers'
-own frameworks train against simulators too.
+Do the arithmetic before scaling up: every forward is one job and every
+backward is two jobs per parameter, so 200 steps of a 6-parameter mesh is 2,600
+tasks. Settle the model in simulation first; the manufacturers' own frameworks
+train against simulators for the same reason.
 
     pip install qsim-sdk perceval-quandela torch
 """
@@ -45,7 +43,7 @@ layer = PhotonicLayer(
     circuit,
     [1, 1],                       # one photon into each input mode
     shots=4000,
-    engine="photonic.slos.cpu",   # "qpu.quandela.belenos" for the real device
+    engine="photonic.slos.cpu",   # exact, to 12 modes; "photonic.gpu" samples to 24
     init=[0.9],                   # start well away from the answer
     outcomes=["|1,1>", "|2,0>", "|0,2>"],
 )

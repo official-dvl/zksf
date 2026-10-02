@@ -22,9 +22,7 @@ from perceval.components import BS, PERM
 import qsim_sdk
 
 # Three modes. The permutation brings the photons in modes 0 and 2 together, then a
-# balanced beamsplitter interferes them. Modes 0 and 2 rather than 0 and 1 because
-# Belenos has single-photon sources on alternating modes, so a program written this way
-# runs unchanged on hardware.
+# balanced beamsplitter interferes them.
 circuit = pcvl.Circuit(3) // (1, PERM([1, 0])) // (0, BS.H())
 
 client = qsim_sdk.Client(token=os.environ["ZKSF_TOKEN"])
@@ -46,14 +44,6 @@ print(f"coincidences: {coincidences}  (exactly 0 in simulation)")
 # reports no approximation error and only shot noise applies.
 assert coincidences == 0, counts
 
-# The same program on real hardware:
-#
-#     job = client.run_photonic(circuit, [1, 0, 1], shots=1000,
-#                               engine="qpu.quandela.belenos")
-#
-# Photons are lost, sources are imperfect, and the coincidence term stops being zero.
-# Three runs on Belenos bunched 95.4%, 97.0% and 97.7% of the time. The device
-# also returns its own declared single-photon purity, indistinguishability and
-# transmittance with the result, so a run can state what the hardware claimed next to
-# what it did. Belenos accepts photons only on its connected input modes, and a program
-# that puts one elsewhere is refused before submission rather than after you have paid.
+# On real photonic hardware photons are lost and sources are imperfect, so the
+# coincidence term stops being zero. The exact distribution above is the reference such
+# a run is certified against.
