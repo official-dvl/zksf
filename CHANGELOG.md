@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.2]
+
+### Changed
+- The README, the engine table, the `run_photonic` docstring and the examples
+  describe the processors and simulators currently offered. No change to the
+  client's behaviour: existing code keeps working without changes.
+
 ## [0.13.1]
 
 ### Changed

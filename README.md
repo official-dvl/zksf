@@ -6,6 +6,7 @@
 [![Qiskit](https://img.shields.io/badge/Qiskit-%E2%89%A5%201.0-6133BD?logo=qiskit&logoColor=white)](https://github.com/Qiskit/qiskit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/official-dvl/zksf/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21836619.svg)](https://doi.org/10.5281/zenodo.21836619)
+[![Quantum computing mobile app on Google Play](https://img.shields.io/badge/Mobile_app-Google_Play-34A853?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.quantumcomputing.app)
 
 Official Python client for **ZKSF** (Zero Kelvin Simulation Foundry): a cloud service
 that executes quantum circuits on classical simulators, GPU accelerators, or real
@@ -184,29 +185,23 @@ sequence's abstract representation as a JSON string instead. `estimate_sequence(
 prices it first, free, with the same arguments `run_sequence` takes.
 
 The same sequence runs on real neutral-atom hardware by naming a different engine.
-`analog.pulser.cpu` is the exact local reference, capped at 14 atoms; the two processors
-go far wider than anything that can be simulated exactly, so a run above that ceiling
+`analog.pulser.cpu` is the exact local reference, capped at 14 atoms; the processor
+goes far wider than anything that can be simulated exactly, so a run above that ceiling
 returns results and no ZHF certificate:
 
 ```python
 job = client.run_sequence(seq, shots=100, engine="qpu.quera.aquila")   # up to 256 atoms
-job = client.run_sequence(seq, shots=20,  engine="qpu.pasqal.fresnel") # up to 100 atoms
 ```
 
-Two practical differences from the gate QPUs, both worth knowing before submitting.
+One practical difference from the gate QPUs, worth knowing before submitting.
 Aquila runs only inside QuEra's published execution windows, so a submission outside one
-is accepted and waits rather than failing. FRESNEL bills machine time rather than shots,
-at roughly four seconds of QPU wall clock per shot, so the 1,024-shot default that is
-nearly free elsewhere would be a very expensive job here; shot counts are capped
-server-side for that reason, and the refusal says so.
+is accepted and waits rather than failing.
 
 ### 5.0.1 Photonic linear optics
 
-Nor does photonic hardware take a circuit in the gate sense. Quandela sells Belenos as a
-12-qubit machine (MosaiQ 12), and dual-rail encoding does spend two of its 24 modes on
-each qubit, but the interface exposed here is the optics underneath: there are no gates,
-and photons enter chosen modes, interfere through beamsplitters and phase shifters,
-and the answer is which modes they leave by. A program is therefore two things, a
+Nor does a photonic program take a circuit in the gate sense. The interface is the
+optics: there are no gates, and photons enter chosen modes, interfere through
+beamsplitters and phase shifters, and the answer is which modes they leave by. A program is therefore two things, a
 [Perceval](https://perceval.quandela.net/) circuit and the input photons, because unlike
 a gate circuit it does not carry its own initial state. Both are hashed, so two runs
 that differ only in where the photons entered cannot share a certificate.
@@ -228,9 +223,8 @@ which is what a photonic certificate reports.
 
 The input state accepts an occupation list as above, a `perceval.BasicState`, or either
 one already serialised. Perceval is not a dependency of this package, and the list form
-needs it only for the circuit. Pass `engine="qpu.quandela.belenos"` to run on real
-hardware, which accepts photons only on its connected input modes and refuses anything
-else before submission rather than after you have paid. `estimate_photonic(circuit,
+needs it only for the circuit. `photonic.slos.cpu` computes the exact distribution to
+12 modes and `photonic.gpu` samples to 24 modes and 12 photons. `estimate_photonic(circuit,
 input_state, shots)` prices it first, free, with the same arguments `run_photonic` takes.
 
 ### 5.0.2 Parameter sweeps and training loops
@@ -496,9 +490,7 @@ Selection can be overridden with the `engine` argument.
 | QPU | `qpu.iqm.emerald` | Real hardware | IQM Emerald superconducting processor, 54 qubits, up to 20,000 shots. Billed at provider cost |
 | CPU | `photonic.slos.cpu` | Linear optics (Perceval SLOS) | Photonic. Takes a circuit and an input Fock state, not a gate circuit, so it is never routed to and is named explicitly. Exact, and capped at 12 modes: cost grows with the ways the photons can distribute over the modes, so modes alone understate it. See section 5.0.1 |
 | QPU | `qpu.aqt.ibex` | Real hardware | AQT IBEX Q1 trapped-ion processor, 12 qubits, up to 2,000 shots. Billed at provider cost |
-| QPU | `qpu.quandela.belenos` | Real hardware | Quandela Belenos photonic processor (sold as MosaiQ 12, a 12-qubit machine): up to 24 modes and 12 photons, two modes per qubit under dual-rail encoding, inputs on connected modes only. Billed at provider cost |
 | QPU | `qpu.quera.aquila` | Real hardware | QuEra Aquila neutral-atom processor, up to 256 atoms. Takes the same Pulser sequence as `analog.pulser.cpu`, not a gate circuit, so it is named explicitly. Runs only inside QuEra's published execution windows: a submission outside one is accepted and waits. Billed at provider cost |
-| QPU | `qpu.pasqal.fresnel` | Real hardware | Pasqal FRESNEL neutral-atom processor, up to 100 atoms. Also takes a Pulser sequence. Bills **machine time rather than shots**, so a shot is roughly four seconds of QPU wall clock and the usual 1,024-shot default would be an expensive job; shot counts are capped server-side for that reason. Billed at provider cost |
 | CPU | `neural.cpu` | Neural-network wavefunction (variational Monte Carlo) | Ground states rather than circuits: takes a Hamiltonian through `solve()`, up to 40 spins. A circuit sent to it is refused |
 | TPU | `neural.tpu` | The same method on a Google TPU | The same results and bound as `neural.cpu`. $0.25 per task for the machine's first 480 seconds, start-up included, then $1.85 per chip-hour by the second; estimate it first with `estimate_solve()` |
 
