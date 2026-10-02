@@ -1390,9 +1390,9 @@ class Client:
         Both are required and both are hashed, because a linear-optics circuit
         does not carry its own initial state. Like analog work this names its
         engine rather than being routed, since routing reads gate-circuit
-        features that a photonic program does not have. Pass
-        engine="qpu.quandela.belenos" to run on real hardware, which accepts
-        photons only on its connected input modes.
+        features that a photonic program does not have.
+        engine="photonic.slos.cpu" computes the exact distribution to 12
+        modes; engine="photonic.gpu" samples to 24 modes and 12 photons.
         """
         resp = self._http.post(
             "/jobs",
