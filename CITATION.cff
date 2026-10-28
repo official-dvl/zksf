@@ -13,11 +13,13 @@ url: "https://zksf.org"
 abstract: >-
   Python client for a cloud service that executes quantum circuits on classical
   simulators, GPU accelerators, or real quantum processors, and attaches a
-  documented accuracy statement to every approximate result. Three certification
+  documented accuracy statement to every approximate result. Four certification
   protocols are defined: ZCC-v0.1 for simulated results, ZHF-v0.1 for
-  quantum-hardware fidelity, and ZQEC-v0.1 for the logical error rate of a
-  quantum error correction memory experiment, reported with a 95% confidence
-  interval. Certificates are independently verifiable without authentication.
+  quantum-hardware fidelity, ZQEC-v0.1 for the logical error rate of a quantum
+  error correction memory experiment, reported with a 95% confidence interval,
+  and ZCC-Estimate-v0.2 for error-mitigated values, stated with a statistical
+  uncertainty rather than a bound, and neural ground-state energies.
+  Certificates are independently verifiable without authentication.
 keywords:
   - quantum computing
   - quantum circuit simulation
@@ -28,5 +30,6 @@ keywords:
   - quantum error correction
   - surface code
   - logical qubits
+  - error mitigation
 license: MIT
-version: 0.13.3
+version: 0.13.4

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.4]
+
+### Changed
+- The Zenodo description (`.zenodo.json`), the `CITATION.cff` abstract, section 4 of
+  `docs/CERTIFICATION.md` and the quickstart notebook name all four protocols; they
+  still described two or three. No change to the client's behaviour: existing code
+  keeps working without changes.
+
 ## [0.13.3]
 
 ### Changed
