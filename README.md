@@ -453,6 +453,7 @@ The client raises rather than returning a result that cannot be trusted:
 | `qsim_sdk.JobRejected` | The circuit is intractable or infeasible under the request. The message states why, and what change would make it feasible |
 | `qsim_sdk.JobFailed` | An engine error or a hardware-provider error |
 | `qsim_sdk.CancelRefused` | `cancel()` was declined: the job has started, has finished, or runs where cancelling is not offered. The message says which |
+| `qsim_sdk.CertificateRefused` | `certificate()` was declined: the job is not found or not finished, or is not eligible (a plain `noisy.cpu` preview, or a tomography result). The message says which and what to run instead |
 | `TimeoutError` | The job did not reach a terminal state within `timeout` seconds |
 
 Rejection is deliberate. A circuit that would return an inconclusive answer is refused

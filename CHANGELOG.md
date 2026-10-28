@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.5]
+
+### Fixed
+- `certificate()` now raises `CertificateRefused` carrying the service's reason when a
+  certificate cannot be issued (a plain `noisy.cpu` preview, a tomography result, a job
+  not found or not finished). Before, it raised a bare HTTP 409 error and the reason was
+  lost. `CertificateRefused` is an `httpx.HTTPStatusError`, so code that already catches
+  that keeps working.
+
 ## [0.13.4]
 
 ### Changed
