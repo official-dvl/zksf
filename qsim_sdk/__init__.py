@@ -81,6 +81,13 @@ class CancelRefused(RuntimeError):
     started on the device, has finished, or runs where cancelling is not offered."""
 
 
+class CertificateRefused(httpx.HTTPStatusError):
+    """A certificate the service declined to issue, carrying its reason: the job is not
+    found or has not finished, or it is not eligible (a plain ``noisy.cpu`` preview, or a
+    tomography reconstruction). The message says which and what to run instead. It is an
+    ``httpx.HTTPStatusError``, so code that already catches that keeps working."""
+
+
 def _detail(resp: Any) -> str:
     """The service's own explanation from an error response."""
     try:
@@ -578,9 +585,15 @@ class Client:
         Returns `cert_id`, `protocol`, `verify_url` and `download_url` (the PDF).
         Both URLs resolve without an account. For a batch, `index` names the
         evaluation to certify, since the points of a sweep do not share a bound.
+
+        Raises CertificateRefused with the service's reason when none can be issued:
+        the job is not found or has not finished, or it is not eligible (a plain
+        ``noisy.cpu`` run, which is a preview of device noise, or a tomography result).
         """
         params = {"index": index} if index is not None else None
         resp = self._http.post(f"/jobs/{job_id}/certificate", params=params)
+        if resp.status_code in (404, 409, 422):
+            raise CertificateRefused(_detail(resp), request=resp.request, response=resp)
         resp.raise_for_status()
         body = resp.json()
         download = body.get("download_url")
