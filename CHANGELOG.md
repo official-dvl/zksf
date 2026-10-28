@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.3]
+
+### Changed
+- The README's certification section names all four protocols, ZQEC-v0.1 for
+  error-correction runs among them, and says where error mitigation is certified:
+  `noisy.cpu` and four gate QPUs (Rigetti, IQM Garnet, IQM Emerald and AQT IBEX), not
+  IonQ. A `noisy.cpu` run without mitigation is not certified.
+- The README and the `qec_scaling` docstring describe the suppression factor as fitted
+  to failure counts measured at each distance, as its certificate states it.
+- `docs/CERTIFICATION.md` describes the Logical Error Suppression certificate and
+  adds a section for ZCC-Estimate-v0.2. No change to the client's behaviour: existing
+  code keeps working without changes.
+
 ## [0.13.2]
 
 ### Changed

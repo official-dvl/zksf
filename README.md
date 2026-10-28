@@ -395,16 +395,16 @@ error rate.**
 ```python
 job = client.qec_scaling(physical_error=1e-3, target_logical_error_rate=1e-9)
 res = job["result"]
-res["suppression"]["lambda"]      # measured across distances 3, 5 and 7
+res["suppression"]["lambda"]      # fitted to failures measured at distances 3, 5, 7
 res["physical_qubits"]            # what one logical qubit costs
 res["basis"]                      # measured, or extrapolated from what
 ```
 
-**Read `basis`.** The suppression factor is measured from real runs, the distance that
-follows from it is arithmetic, and a target below anything those runs could observe is
-reached by extrapolating along the measured slope. At or above threshold the answer is
-that no number of physical qubits reaches the target until the error rate comes down,
-which is a result rather than a failure.
+**Read `basis`.** The suppression factor is fitted to failure counts measured in real
+runs, the distance that follows from it is arithmetic, and a target below anything those
+runs could observe is reached by extrapolating along the fitted slope. At or above
+threshold the answer is that no number of physical qubits reaches the target until the
+error rate comes down, which is a result rather than a failure.
 
 Codes are `surface`, `surface_x`, `surface_unrotated` and `repetition`, decoded by
 minimum-weight perfect matching. Colour and qLDPC codes are refused rather than decoded
@@ -481,7 +481,7 @@ Selection can be overridden with the `engine` argument.
 | CPU | `mps.quimb.cpu` | Tensor network (quimb) | Matrix product state, past 100 qubits. Accuracy depends on circuit entanglement. The only engine offering measured single-run bounds |
 | CPU | `mps.aer.cpu` | Tensor network (Aer) | An independent MPS implementation, retained for cross-checking against the quimb engine |
 | CPU | `pauli.cpu` | Pauli propagation | Expectation values rather than sampled counts. Supported gates: `h`, `cx`, `cz`, `swap`, `rx`, `ry`, `rz`, `rzz`, `rxx`, `ryy`, `x`, `y`, `z`, `s`, `t`, and their inverses |
-| CPU | `noisy.cpu` | Density matrix or statevector with a noise model | Device-noise preview, superconducting model by default, optional zero-noise error mitigation. Same 30-qubit ceiling. **Not certifiable, see section 7** |
+| CPU | `noisy.cpu` | Density matrix or statevector with a noise model | Device-noise preview, superconducting model by default, optional zero-noise error mitigation. Same 30-qubit ceiling. **Not certified without mitigation, see section 7** |
 | GPU | `exact.gpu` | Aer CUDA statevector | Exact, to 32 qubits |
 | CPU | `analog.pulser.cpu` | Rydberg dynamics (QuTiP) | Neutral-atom analog. Takes a Pulser sequence, not a circuit, so it is never routed to and is named explicitly. Exact: the state is integrated without truncation, and the register is capped at 14 atoms. See section 5.0 |
 | QPU | `qpu.rigetti` | Real hardware | Rigetti Cepheus superconducting processor, 108 qubits. Billed at provider cost |
@@ -504,19 +504,21 @@ configuration rather than properties of the methods.
 
 ## 7. Certification
 
-Two protocols are defined. Both are described in full, with worked figures, in
+Four protocols are defined. All are described in full, with worked figures, in
 [`docs/CERTIFICATION.md`](https://github.com/official-dvl/zksf/blob/main/docs/CERTIFICATION.md).
 
 | Protocol | Applies to | Reports |
 |---|---|---|
 | **ZCC-v0.1** | Simulated results | An error bound on the returned distribution |
 | **ZHF-v0.1** | Quantum-hardware results | Measured fidelity against the exact ideal distribution |
-| **ZCC-Estimate-v0.2** | Error-mitigated values (`mitigate=True`) | A statistical uncertainty on the mitigated value, not a bound |
+| **ZQEC-v0.1** | Error-correction runs (`qec`, `qec_scaling`) | A Wilson 95% interval on each measured logical error rate; for a scaling run, the fitted suppression factor with its 95% range, kept apart from any projection |
+| **ZCC-Estimate-v0.2** | Error-mitigated values (`mitigate=True`) on `noisy.cpu` and on Rigetti, IQM Garnet, IQM Emerald and AQT IBEX (not IonQ), and neural ground states | A statistical uncertainty on the mitigated value, not a bound. On hardware it is a Mitigated Hardware Estimate |
 
 ZCC-v0.1 covers `exact.cpu`, `exact.gpu`, `clifford`, `mps.quimb.cpu`, `mps.aer.cpu`,
 and `pauli.cpu`. It does **not** cover `noisy.cpu`, for the reason given in section 8.
+With mitigation, the mitigated value from `noisy.cpu` is certified under ZCC-Estimate-v0.2.
 
-A `run_tomography()` result is **not eligible for either protocol**: the reconstruction
+A `run_tomography()` result is **not eligible for any protocol**: the reconstruction
 does not carry a fidelity bound, so requesting a certificate returns 409. Its measured
 agreement with held-out records is reported on the job instead, under `agreement`.
 
@@ -547,7 +549,8 @@ boundaries:
 3. **Noise-preview runs are not certifiable.** The `noisy.cpu` engine simulates a
    device noise model, so its output deliberately approximates a noisy machine rather
    than the ideal distribution. There is no ideal reference for a bound to be taken
-   against, and no certificate is issued for these runs.
+   against, and no certificate is issued for these runs: a certificate request returns
+   409. With mitigation, the mitigated value is certified under ZCC-Estimate-v0.2.
 4. A ZHF-v0.1 fidelity is a measurement of one hardware run against a reference
    distribution. It characterises that execution on that device at that time. It does
    not predict the fidelity of a subsequent run.
