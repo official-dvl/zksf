@@ -155,7 +155,7 @@ produces only `00` and `11`.
 **Asserts:** the logical error rate measured for a stated code, distance, round
 count and noise model, **with a two-sided 95% confidence interval**.
 
-The other two protocols answer "how far from ideal is this result". This one answers a
+ZCC-v0.1 and ZHF-v0.1 answer "how far from ideal is this result". This one answers a
 different question, and the one every fault-tolerance roadmap is quoted in: how well
 does a code hold a logical qubit, and therefore how many physical qubits does one
 logical qubit cost at a given physical error rate.
