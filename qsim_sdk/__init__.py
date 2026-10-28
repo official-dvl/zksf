@@ -865,17 +865,17 @@ class Client:
             job = client.qec_scaling(target_logical_error_rate=1e-9,
                                      physical_error=1e-3)
             res = job["result"]
-            res["suppression"]["lambda"]   # 2.1, measured on three runs
+            res["suppression"]["lambda"]   # 2.1, fitted to three runs
             res["physical_qubits"]         # what one logical qubit costs
             res["basis"]                   # measured, or extrapolated from what
 
         THE TWO QUESTIONS A BUYER ACTUALLY HAS, out of one set of runs. Does
         distance help on my device, and how many physical qubits is a logical
-        one at my error rate. Read `basis`: the suppression factor is measured,
-        the distance that follows from it is arithmetic, and a target below
-        anything these runs could observe is reached by extrapolation. At or
-        above threshold the answer is that there is no such number, which is a
-        result rather than a failure.
+        one at my error rate. Read `basis`: the suppression factor is fitted to
+        failure counts measured at each distance, the distance that follows from
+        it is arithmetic, and a target below anything these runs could observe
+        is reached by extrapolation. At or above threshold the answer is that
+        there is no such number, which is a result rather than a failure.
         """
         job_id = self.submit_qec_scaling(code, distances, **kwargs)
         return self._wait(job_id, poll_seconds, timeout)
