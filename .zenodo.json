@@ -1,6 +1,6 @@
 {
   "title": "qsim-sdk: Python client for the Zero Kelvin Simulation Foundry",
-  "description": "<p>Python client for a cloud service that executes quantum circuits on classical simulators, GPU accelerators, or real quantum processors, and attaches a documented accuracy statement to every approximate result.</p><p>One API call reaches exact statevector simulation on CPU or GPU, stabilizer simulation for Clifford circuits, matrix product state simulation for circuits of bounded entanglement, Pauli propagation for expectation values on shallow circuits, and real superconducting and trapped-ion hardware. A router sends each circuit to the cheapest method able to answer it.</p><p>Two certification protocols are defined. <strong>ZCC-v0.1</strong> states simulation accuracy, either as a convergence check or, on the certified path, as a single-run bound measured from the weight discarded during truncation. <strong>ZHF-v0.1</strong> states hardware fidelity, computed by comparing measured device counts against the exact ideal distribution where the circuit remains classically tractable. Runs whose own error bound would be vacuous are rejected with a diagnostic rather than returned as a number. Certificates are independently verifiable without authentication.</p>",
+  "description": "<p>Python client for a cloud service that executes quantum circuits on classical simulators, GPU accelerators, or real quantum processors, and attaches a documented accuracy statement to every approximate result.</p><p>One API call reaches exact statevector simulation on CPU or GPU, stabilizer simulation for Clifford circuits, matrix product state simulation for circuits of bounded entanglement, Pauli propagation for expectation values on shallow circuits, and real superconducting and trapped-ion hardware. A router sends each circuit to the cheapest method able to answer it.</p><p>Four certification protocols are defined. <strong>ZCC-v0.1</strong> states simulation accuracy, either as a convergence check or, on the certified path, as a single-run bound measured from the weight discarded during truncation. <strong>ZHF-v0.1</strong> states hardware fidelity, computed by comparing measured device counts against the exact ideal distribution where the circuit remains classically tractable. <strong>ZQEC-v0.1</strong> states the logical error rate of a quantum error correction memory experiment with a Wilson 95% interval and, for a scaling run, the suppression factor fitted across code distances with its 95% range. <strong>ZCC-Estimate-v0.2</strong> covers error-mitigated values, stated with a statistical uncertainty rather than a bound, and neural ground-state energies. Runs whose own error bound would be vacuous are rejected with a diagnostic rather than returned as a number. Certificates are independently verifiable without authentication.</p>",
   "upload_type": "software",
   "license": "mit",
   "access_right": "open",
@@ -22,6 +22,8 @@
     "error bounds",
     "certification",
     "reproducibility",
+    "quantum error correction",
+    "error mitigation",
     "Qiskit"
   ],
   "related_identifiers": [
