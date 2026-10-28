@@ -1,4 +1,4 @@
-# Certification protocols: ZCC-v0.1, ZHF-v0.1 and ZQEC-v0.1
+# Certification protocols: ZCC-v0.1, ZHF-v0.1, ZQEC-v0.1 and ZCC-Estimate-v0.2
 
 This document describes what ZKSF certificates assert, how they are produced, and
 what they do not claim. It is a reference for users of `qsim-sdk`. The normative
@@ -46,7 +46,7 @@ discarded Schmidt weight accumulated across truncations is tracked during the
 contraction and converted into a single-run bound on the output distribution. The
 discarded weight is measured within the run rather than estimated or extrapolated,
 and each individual truncation is optimal by Eckart-Young. The conversion to a
-per-outcome bound assumes truncation errors accumulate incoherently; see section 6.4
+per-outcome bound assumes truncation errors accumulate incoherently; see section 7.4
 for the worst case and for the measurements showing that assumption failing in deep
 circuits, which is why this is stated as an empirically supported bound rather than a
 proof.
@@ -67,7 +67,7 @@ Error bound      : 1.06e-04
 
 The bound of `1.06e-04` is the quantity to reason about. It states that each returned
 outcome probability lies within that distance of the exact value for this circuit,
-under the assumptions in section 6. The full certificate is public at
+under the assumptions in section 7. The full certificate is public at
 <https://api.zksf.org/certify/3d409b6562194a2e>.
 
 A circuit the simulator can represent exactly reports a discarded weight at or near
@@ -84,7 +84,7 @@ bound. The example above is chosen deliberately so the bound is doing real work.
 | `mps.quimb.cpu` | Yes | Rigorous single-run truncation bound in certified mode |
 | `mps.aer.cpu` | Yes | Convergence diagnostic |
 | `pauli.cpu` | Yes | Convergence diagnostic on truncated operator weight |
-| `noisy.cpu` | **No** | Not applicable, see below |
+| `noisy.cpu` | **No** | Not applicable, see below. With mitigation, ZCC-Estimate-v0.2 (section 5) |
 
 ### 2.4 Why noise-preview runs are not certified
 
@@ -94,7 +94,12 @@ behaviour of a noisy physical machine rather than the ideal distribution.
 
 ZCC-v0.1 bounds the distance between a returned distribution and the exact one. For a
 noise-preview run that distance is not an error, it is the intended result. Certifying
-it would be a category mistake, so no certificate is issued for these runs.
+it would be a category mistake, so no certificate is issued for these runs: the API
+answers a certificate request for one with HTTP 409 and says why.
+
+With error mitigation (`mitigate=True` and an observable) the reported figure is no longer
+a sample of the noisy distribution but an estimate of the ideal expectation value, and it
+is certified as one under ZCC-Estimate-v0.2 (section 5).
 
 Use `noisy.cpu` to anticipate how a circuit will behave on hardware. Use `qpu.rigetti`
 or `qpu.ionq` with ZHF-v0.1 when a measured, certifiable fidelity is required.
@@ -215,6 +220,9 @@ at different shot counts are the same experiment measured to different precision
 they hash the same, so a reader can see at a glance that a narrower interval came from
 more shots rather than from a different setup.
 
+A scaling run (section 4.6) hashes the code, the distances, the physical error rate and
+the target when one is set, and leaves out the shot count for the same reason.
+
 ### 4.5 Worked example
 
 A distance-5 rotated surface code at a physical error rate of 0.1%, held for 5 rounds:
@@ -260,13 +268,71 @@ At or above the code's threshold, where the suppression factor is at or below 1,
 answer is that **no number of physical qubits reaches the target** until the physical
 error rate falls. That is a result, not an error condition.
 
+A scaling run is certified in its own right, as a **Logical Error Suppression**
+certificate under ZQEC-v0.1. It keeps three kinds of number apart and labels each:
+
+1. **Measured:** the failure count at each distance, with its Wilson 95% interval.
+2. **Fitted:** the suppression factor `lambda` and its prefactor, from a least-squares
+   line through `log(rate)` against `(d + 1) / 2`, with a joint 95% range for `lambda`.
+   Each distance's interval is widened so that all of them hold together at 95%
+   (Bonferroni), and the range covers every such line through rates inside them.
+3. **Projected:** the distance and physical qubit count for a target, only when one is
+   set, and stated as a projection along the fitted factor.
+
+A distance with no failures is bounded by its interval and left out of the fit. Live
+example: <https://api.zksf.org/certify/881ba3500ed94538> (surface code at a physical
+error rate of 0.001, 200,000 shots at each of distances 3, 5 and 7: `lambda` 7.26
+fitted, 95% range [3.46, 15.2], a projected 577 physical qubits at distance 17 for a
+target of 1e-9).
+
 Physical qubit counts are the qubits the generated circuit operates on. They are not
 `stim.Circuit.generated(...).num_qubits`, which is the largest qubit index plus one: a
 rotated surface code is laid out on a coordinate grid whose corners are never used, so
 that field reports 26 for a distance-3 code that touches 17. A rotated code of distance
 `d` uses `2d^2 - 1` physical qubits and an unrotated one `(2d-1)^2`.
 
-## 5. Certificate lifecycle and independent verification
+## 5. ZCC-Estimate-v0.2: estimates, stated as estimates
+
+**Applies to:** zero-noise extrapolation (error mitigation, `mitigate=True` with an
+observable) on `noisy.cpu` and on four gate QPUs, namely Rigetti, IQM Garnet, IQM Emerald
+and AQT IBEX, and to neural ground-state searches. Mitigation is not yet available on
+IonQ: a mitigated IonQ job is refused before anything is charged.
+
+**Asserts:** a mitigated value with a statistical uncertainty. An extrapolated value
+cannot be bounded with certainty, so the certificate says `certified: false` and
+`estimated: true`, and never presents the uncertainty as a bound.
+
+Zero-noise extrapolation runs a circuit at several deliberately amplified noise levels and
+extrapolates the chosen observable back to zero noise. Its uncertainty is the larger of
+the shot noise propagated through the extrapolation and the disagreement between linear,
+quadratic and Richardson fits of the same data, computed without reference to the true
+answer.
+
+**That uncertainty is one standard error** (`sigma_level: 1`). Measured against known
+answers over 3,312 runs, an interval of that width contained the truth 62.4% of the time
+on the simulator path and 63.7% on the hardware path, close to the 68.3% that one sigma
+implies. A 95% claim would need about 2.31 times the interval. Below 10,000 shots the
+certificate carries an advisory, because at those shot counts on hardware the mitigated
+value beat the raw one less often than not.
+
+On the simulator the certificate is a Simulation Accuracy certificate. On real hardware
+it is a **Mitigated Hardware Estimate** under the same protocol, naming the device and
+reporting no hardware fidelity, because the counts behind it were measured in the
+observable's basis and describe the mitigation runs rather than the circuit as submitted.
+
+Live examples:
+- Simulator: <https://api.zksf.org/certify/9dcf796bd99648a0> (512 shots on `noisy.cpu`,
+  mitigated value -0.2873 with a one-sigma uncertainty of 0.0515).
+- Hardware: <https://api.zksf.org/certify/2ebc55282a644629> (a Bell pair on Rigetti
+  Cepheus-1-108Q, 1,000 shots at each of three noise levels, observable ZZ with an ideal
+  value of 1: raw 0.640, mitigated 0.674 with a one-sigma uncertainty of 0.060, toward the
+  ideal without reaching it, and carrying the advisory).
+
+A neural ground-state search reports an energy with an unconditional ceiling, from the
+variational principle widened by five standard errors, and a floor that holds only under
+a stated condition. The certificate keeps the two apart and never merges them.
+
+## 6. Certificate lifecycle and independent verification
 
 A certificate is minted from a completed job and receives a stable identifier.
 
@@ -296,7 +362,7 @@ certificate is issued without one.
 Certificate pages carry no personally identifying information about the account that
 performed the run.
 
-## 6. Assumptions and limitations
+## 7. Assumptions and limitations
 
 Declared explicitly. A certification claim is only as credible as its stated boundary.
 
@@ -337,7 +403,7 @@ Declared explicitly. A certification claim is only as credible as its stated bou
    Specifications below 1.0 may change, and certificates remain interpretable because
    the version travels with them.
 
-## 7. Rejection as a design property
+## 8. Rejection as a design property
 
 A circuit whose result could not be certified to a useful degree is rejected before
 execution, and the client raises `qsim_sdk.JobRejected` carrying the reason and the
@@ -347,7 +413,7 @@ This is intentional. Returning a result with a vacuous error bar is worse than
 returning no result, because the former is indistinguishable from a useful one at a
 glance.
 
-## 8. References
+## 9. References
 
 - Protocol specification and benchmarks: <https://zksf.org/blog/quantum-error-bars/>
 - Engine selection guidance: <https://zksf.org/blog/cpu-gpu-qpu-when-to-use/>
